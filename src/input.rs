@@ -1,79 +1,83 @@
+use component::input::{InputEvent, TextInput};
 use gpui::*;
 
 pub struct Root {
-    text_input: View<component::input::TextInput>,
-    list_state: ListState,
+    text_input: View<TextInput>,
     state_model: Model<State>,
+    list_state: ListState,
     _task_update_list: Option<Task<()>>,
 }
 
 impl Root {
     pub fn new(cx: &mut ViewContext<Self>) -> Self {
         let text_input = cx.new_view(|cx| {
-            let text_input = component::input::TextInput::new(cx);
+            let text_input = TextInput::new(cx);
             text_input
         });
         cx.subscribe(&text_input, Self::on_input_event).detach();
+
+        let state_model = cx.new_model(|_cx| State { items: vec![] });
+        cx.observe(&state_model, Self::on_state_model_notify)
+            .detach();
 
         let list_state = ListState::new(0, ListAlignment::Top, Pixels(20.), move |_, _| {
             div().into_any_element()
         });
 
-        let state_model = cx.new_model(|_cx| State { items: vec![] });
-        cx.observe(&state_model, |this, model, cx| {
-            let items = model.read(cx).items.clone();
-            this.list_state = ListState::new(
-                items.len(),
-                ListAlignment::Top,
-                Pixels(20.),
-                move |idx, _cx| {
-                    let item = items.get(idx).unwrap().clone();
-                    div().child(item).into_any_element()
-                },
-            );
-            cx.notify();
-        })
-        .detach();
-
         Self {
             text_input,
-            list_state,
             state_model,
+            list_state,
             _task_update_list: None,
         }
     }
 
     fn on_input_event(
         &mut self,
-        _: View<component::input::TextInput>,
-        event: &component::input::InputEvent,
+        _text_input_view: View<TextInput>,
+        input_event: &InputEvent,
         cx: &mut ViewContext<Self>,
     ) {
-        match event {
-            component::input::InputEvent::Change(_text) => {}
-            component::input::InputEvent::PressEnter => {
-                self._task_update_list = Some(cx.spawn(Self::update_list))
+        match input_event {
+            InputEvent::Change(_text) => {}
+            InputEvent::PressEnter => {
+                self._task_update_list = Some(cx.spawn(Self::update_state_model))
             }
             _ => {}
         };
     }
 
-    async fn update_list(view: WeakView<Self>, mut cx: AsyncWindowContext) {
-        if let Some(view) = view.upgrade() {
-            view.update(&mut cx, |this, cx| {
-                this.state_model.update(cx, |state, cx| {
-                    state.items.clear();
-                    let t = this.text_input.read(cx).text();
-                    t.chars().for_each(|c| {
-                        state
-                            .items
-                            .push(ListItem::new(c.to_string(), c.to_string()))
+    async fn update_state_model(root_weak_view: WeakView<Self>, mut cx: AsyncWindowContext) {
+        if let Some(root_view) = root_weak_view.upgrade() {
+            root_view
+                .update(&mut cx, |this, cx| {
+                    this.state_model.update(cx, |state, cx| {
+                        state.items.clear();
+                        let t = this.text_input.read(cx).text();
+                        t.chars().for_each(|c| {
+                            state
+                                .items
+                                .push(ListItem::new(c.to_string(), c.to_string()))
+                        });
+                        cx.notify();
                     });
-                    cx.notify();
-                });
-            })
-            .unwrap();
+                })
+                .unwrap();
         }
+    }
+
+    fn on_state_model_notify(&mut self, state_model: Model<State>, cx: &mut ViewContext<Self>) {
+        let items = state_model.read(cx).items.clone();
+        self.list_state = ListState::new(
+            items.len(),
+            ListAlignment::Top,
+            Pixels(20.),
+            move |idx, _cx| {
+                let item = items.get(idx).unwrap().clone();
+                div().child(item).into_any_element()
+            },
+        );
+        cx.notify();
     }
 }
 
