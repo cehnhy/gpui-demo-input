@@ -2,10 +2,10 @@ use component::input::{InputEvent, TextInput};
 use gpui::*;
 
 pub struct Root {
-    text_input: View<TextInput>,
+    text_input_view: View<TextInput>,
     state_model: Model<State>,
+    _update_state_model_task: Option<Task<()>>,
     list_state: ListState,
-    _task_update_list: Option<Task<()>>,
 }
 
 impl Root {
@@ -25,10 +25,10 @@ impl Root {
         });
 
         Self {
-            text_input,
+            text_input_view: text_input,
             state_model,
+            _update_state_model_task: None,
             list_state,
-            _task_update_list: None,
         }
     }
 
@@ -41,29 +41,33 @@ impl Root {
         match input_event {
             InputEvent::Change(_text) => {}
             InputEvent::PressEnter => {
-                self._task_update_list = Some(cx.spawn(Self::update_state_model))
+                self._update_state_model_task = Some(cx.spawn(Self::do_update_state_model_task))
             }
             _ => {}
         };
     }
 
-    async fn update_state_model(root_weak_view: WeakView<Self>, mut cx: AsyncWindowContext) {
-        if let Some(root_view) = root_weak_view.upgrade() {
-            root_view
-                .update(&mut cx, |this, cx| {
-                    this.state_model.update(cx, |state, cx| {
-                        state.items.clear();
-                        let t = this.text_input.read(cx).text();
-                        t.chars().for_each(|c| {
-                            state
-                                .items
-                                .push(ListItem::new(c.to_string(), c.to_string()))
-                        });
-                        cx.notify();
-                    });
-                })
-                .unwrap();
-        }
+    async fn do_update_state_model_task(
+        root_weak_view: WeakView<Self>,
+        mut cx: AsyncWindowContext,
+    ) {
+        // do async
+        root_weak_view
+            .update(&mut cx, Self::update_state_model)
+            .unwrap();
+    }
+
+    fn update_state_model(&mut self, cx: &mut ViewContext<Self>) {
+        self.state_model.update(cx, |state, cx| {
+            state.items.clear();
+            let t = self.text_input_view.read(cx).text();
+            t.chars().for_each(|c| {
+                state
+                    .items
+                    .push(ListItem::new(c.to_string(), c.to_string()))
+            });
+            cx.notify();
+        });
     }
 
     fn on_state_model_notify(&mut self, state_model: Model<State>, cx: &mut ViewContext<Self>) {
@@ -87,14 +91,14 @@ impl Render for Root {
             .size_full()
             .flex()
             .flex_col()
-            .child(self.text_input.clone())
+            .child(self.text_input_view.clone())
             .child(list(self.list_state.clone()).w_full().h_full())
     }
 }
 
 impl FocusableView for Root {
     fn focus_handle(&self, cx: &gpui::AppContext) -> gpui::FocusHandle {
-        self.text_input.focus_handle(cx)
+        self.text_input_view.focus_handle(cx)
     }
 }
 
