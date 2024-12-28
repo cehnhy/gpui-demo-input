@@ -10,22 +10,26 @@ pub struct Root {
 
 impl Root {
     pub fn new(cx: &mut ViewContext<Self>) -> Self {
-        let text_input = cx.new_view(|cx| {
+        // text input view
+        let text_input_view = cx.new_view(|cx| {
             let text_input = TextInput::new(cx);
             text_input
         });
-        cx.subscribe(&text_input, Self::on_input_event).detach();
+        cx.subscribe(&text_input_view, Self::on_input_event)
+            .detach();
 
+        // state model
         let state_model = cx.new_model(|_cx| State { items: vec![] });
         cx.observe(&state_model, Self::on_state_model_notify)
             .detach();
 
+        // list state
         let list_state = ListState::new(0, ListAlignment::Top, Pixels(20.), move |_, _| {
             div().into_any_element()
         });
 
         Self {
-            text_input_view: text_input,
+            text_input_view,
             state_model,
             _update_state_model_task: None,
             list_state,
@@ -113,6 +117,15 @@ pub struct ListItem {
     subtitle: SharedString,
 }
 
+impl ListItem {
+    pub fn new(title: String, subtitle: String) -> Self {
+        ListItem {
+            title: title.into(),
+            subtitle: subtitle.into(),
+        }
+    }
+}
+
 impl RenderOnce for ListItem {
     fn render(self, _cx: &mut WindowContext) -> impl IntoElement {
         div()
@@ -128,14 +141,5 @@ impl RenderOnce for ListItem {
             .text_xl()
             .child(self.title.clone())
             .child(div().flex().text_sm().child(self.subtitle.clone()))
-    }
-}
-
-impl ListItem {
-    pub fn new(title: String, subtitle: String) -> Self {
-        ListItem {
-            title: title.into(),
-            subtitle: subtitle.into(),
-        }
     }
 }
