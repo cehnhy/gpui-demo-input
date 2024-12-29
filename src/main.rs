@@ -14,7 +14,13 @@ fn main() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 ..Default::default()
             },
-            |cx| cx.new_view(|cx| Root::new(cx)),
+            |cx| {
+                cx.new_view(|cx| {
+                    let root = Root::new(cx);
+                    cx.focus_self();
+                    root
+                })
+            },
         )
         .unwrap();
 
