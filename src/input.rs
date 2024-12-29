@@ -43,10 +43,10 @@ impl Root {
         cx: &mut ViewContext<Self>,
     ) {
         match input_event {
-            InputEvent::Change(_text) => {}
-            InputEvent::PressEnter => {
+            InputEvent::Change(_text) => {
                 self._update_state_model_task = Some(cx.spawn(Self::do_update_state_model_task))
             }
+            InputEvent::PressEnter => {}
             _ => {}
         };
     }
@@ -64,12 +64,32 @@ impl Root {
     fn update_state_model(&mut self, cx: &mut ViewContext<Self>) {
         self.state_model.update(cx, |state, cx| {
             state.items.clear();
-            let t = self.text_input_view.read(cx).text();
-            t.chars().for_each(|c| {
-                state
-                    .items
-                    .push(ListItem::new(c.to_string(), c.to_string()))
-            });
+
+            let text_content = self.text_input_view.read(cx).text();
+            if text_content.is_empty() {
+                cx.notify();
+                return;
+            }
+
+            if let Ok(entries) = std::fs::read_dir("/Applications") {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        let file_name = path.file_name().unwrap().to_str().unwrap();
+                        if file_name.ends_with(".app")
+                            && file_name
+                                .to_lowercase()
+                                .contains(&text_content.to_lowercase())
+                        {
+                            state.items.push(ListItem::new(
+                                file_name.to_string(),
+                                path.display().to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
+
             cx.notify();
         });
     }
