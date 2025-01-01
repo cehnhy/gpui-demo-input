@@ -17,6 +17,7 @@ pub struct Root {
     state_model: Model<State>,
     list_state: ListState,
     _update_list_task: Option<Task<()>>,
+    _open_application_task: Option<Task<()>>,
 }
 
 impl Root {
@@ -52,6 +53,7 @@ impl Root {
             state_model,
             list_state,
             _update_list_task: None,
+            _open_application_task: None,
         }
     }
 
@@ -66,7 +68,7 @@ impl Root {
                 self._update_list_task = Some(cx.spawn(Self::do_update_list_task))
             }
             InputEvent::PressEnter => {
-                // TODO open application
+                self._open_application_task = Some(cx.spawn(Self::do_open_application_task))
             }
             _ => {}
         };
@@ -110,6 +112,23 @@ impl Root {
             self.list_state.reset(state.items.len());
             cx.notify();
         });
+    }
+
+    async fn do_open_application_task(root_weak_view: WeakView<Self>, mut cx: AsyncWindowContext) {
+        // do async
+        root_weak_view
+            .update(&mut cx, Self::open_application)
+            .unwrap();
+    }
+
+    fn open_application(&mut self, cx: &mut ViewContext<Self>) {
+        let state = self.state_model.read(cx);
+        if let Some(item) = state.items.get(state.selected_id) {
+            let _ = std::process::Command::new("open")
+                .arg("-a")
+                .arg(item.subtitle.as_ref())
+                .output();
+        }
     }
 
     fn select_last(&mut self, _: &Up, cx: &mut ViewContext<Self>) {
