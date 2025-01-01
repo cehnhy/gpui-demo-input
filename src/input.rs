@@ -24,8 +24,8 @@ impl Root {
     pub fn new(cx: &mut ViewContext<Self>) -> Self {
         // query view
         let query_view = cx.new_view(|cx| {
-            let query = TextInput::new(cx);
-            query
+            let test_input = TextInput::new(cx);
+            test_input
         });
         cx.subscribe(&query_view, Self::on_input_event).detach();
 
@@ -52,7 +52,7 @@ impl Root {
             query_view,
             state_model,
             list_state,
-            _update_list_task: None,
+            _update_list_task: Some(cx.spawn(Self::do_update_list_task)),
             _open_application_task: None,
         }
     }
@@ -74,8 +74,8 @@ impl Root {
         };
     }
 
+    // do async
     async fn do_update_list_task(root_weak_view: WeakView<Self>, mut cx: AsyncWindowContext) {
-        // do async
         root_weak_view.update(&mut cx, Self::update_list).unwrap();
     }
 
@@ -83,22 +83,17 @@ impl Root {
         self.state_model.update(cx, |state, cx| {
             state.reset();
 
-            let text_content = self.query_view.read(cx).text();
-            if text_content.is_empty() {
-                self.list_state.reset(0);
-                cx.notify();
-                return;
-            }
-
             if let Ok(entries) = std::fs::read_dir("/Applications") {
+                let text_content = self.query_view.read(cx).text();
                 for entry in entries {
                     if let Ok(entry) = entry {
                         let path = entry.path();
                         let file_name = path.file_name().unwrap().to_str().unwrap();
                         if file_name.ends_with(".app")
-                            && file_name
+                            && (file_name
                                 .to_lowercase()
                                 .contains(&text_content.to_lowercase())
+                                || text_content.is_empty())
                         {
                             state.items.push(ListItem::new(
                                 file_name.to_string(),
@@ -114,8 +109,8 @@ impl Root {
         });
     }
 
+    // do async
     async fn do_open_application_task(root_weak_view: WeakView<Self>, mut cx: AsyncWindowContext) {
-        // do async
         root_weak_view
             .update(&mut cx, Self::open_application)
             .unwrap();
