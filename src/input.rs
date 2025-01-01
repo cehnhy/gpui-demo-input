@@ -1,5 +1,16 @@
 use component::input::{InputEvent, TextInput};
 use gpui::*;
+use prelude::FluentBuilder;
+
+const CONTEXT: &str = "root";
+actions!(root, [Up, Down]);
+
+pub fn init(cx: &mut AppContext) {
+    cx.bind_keys([
+        KeyBinding::new("up", Up, Some(CONTEXT)),
+        KeyBinding::new("down", Down, Some(CONTEXT)),
+    ]);
+}
 
 pub struct Root {
     text_input_view: View<TextInput>,
@@ -19,13 +30,22 @@ impl Root {
             .detach();
 
         // state model
-        let state_model = cx.new_model(|_cx| State { items: vec![] });
-        cx.observe(&state_model, Self::on_state_model_notify)
-            .detach();
+        let state_model = cx.new_model(|_cx| State {
+            selected_id: 0,
+            items: vec![],
+        });
 
         // list state
-        let list_state = ListState::new(0, ListAlignment::Top, Pixels(20.), move |_, _| {
-            div().into_any_element()
+        let list_state = ListState::new(0, ListAlignment::Top, Pixels(20.), {
+            let state_model = state_model.clone();
+            move |idx, cx| {
+                let state = state_model.read(cx);
+                let mut item = state.items.get(idx).unwrap().clone();
+                if idx == state.selected_id {
+                    item.selected = true;
+                }
+                div().child(item).into_any_element()
+            }
         });
 
         Self {
@@ -46,7 +66,9 @@ impl Root {
             InputEvent::Change(_text) => {
                 self._update_state_model_task = Some(cx.spawn(Self::do_update_state_model_task))
             }
-            InputEvent::PressEnter => {}
+            InputEvent::PressEnter => {
+                // TODO open application
+            }
             _ => {}
         };
     }
@@ -64,9 +86,11 @@ impl Root {
     fn update_state_model(&mut self, cx: &mut ViewContext<Self>) {
         self.state_model.update(cx, |state, cx| {
             state.items.clear();
+            state.selected_id = 0;
 
             let text_content = self.text_input_view.read(cx).text();
             if text_content.is_empty() {
+                self.list_state.reset(0);
                 cx.notify();
                 return;
             }
@@ -82,6 +106,7 @@ impl Root {
                                 .contains(&text_content.to_lowercase())
                         {
                             state.items.push(ListItem::new(
+                                false,
                                 file_name.to_string(),
                                 path.display().to_string(),
                             ));
@@ -90,28 +115,32 @@ impl Root {
                 }
             }
 
+            self.list_state.reset(state.items.len());
             cx.notify();
         });
     }
 
-    fn on_state_model_notify(&mut self, state_model: Model<State>, cx: &mut ViewContext<Self>) {
-        let items = state_model.read(cx).items.clone();
-        self.list_state = ListState::new(
-            items.len(),
-            ListAlignment::Top,
-            Pixels(20.),
-            move |idx, _cx| {
-                let item = items.get(idx).unwrap().clone();
-                div().child(item).into_any_element()
-            },
-        );
+    fn up(&mut self, _: &Up, cx: &mut ViewContext<Self>) {
+        self.state_model.update(cx, State::up);
+        let selected_id = self.state_model.read(cx).selected_id;
+        self.list_state.scroll_to_reveal_item(selected_id);
+        cx.notify();
+    }
+
+    fn down(&mut self, _: &Down, cx: &mut ViewContext<Self>) {
+        self.state_model.update(cx, State::down);
+        let selected_id = self.state_model.read(cx).selected_id;
+        self.list_state.scroll_to_reveal_item(selected_id);
         cx.notify();
     }
 }
 
 impl Render for Root {
-    fn render(&mut self, _cx: &mut ViewContext<Self>) -> impl IntoElement {
+    fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
         div()
+            .key_context(CONTEXT)
+            .on_action(cx.listener(Self::up))
+            .on_action(cx.listener(Self::down))
             .size_full()
             .flex()
             .flex_col()
@@ -128,18 +157,45 @@ impl FocusableView for Root {
 
 #[derive(Clone)]
 struct State {
+    selected_id: usize,
     items: Vec<ListItem>,
+}
+
+impl State {
+    fn up(&mut self, _cx: &mut ModelContext<Self>) {
+        if self.items.len() == 0 {
+            return;
+        }
+        if self.selected_id != 0 {
+            self.selected_id -= 1;
+        } else {
+            self.selected_id = self.items.len() - 1;
+        }
+    }
+
+    fn down(&mut self, _cx: &mut ModelContext<Self>) {
+        if self.items.len() == 0 {
+            return;
+        }
+        if self.selected_id != self.items.len() - 1 {
+            self.selected_id += 1;
+        } else {
+            self.selected_id = 0;
+        }
+    }
 }
 
 #[derive(Clone, Debug, IntoElement)]
 pub struct ListItem {
+    selected: bool,
     title: SharedString,
     subtitle: SharedString,
 }
 
 impl ListItem {
-    pub fn new(title: String, subtitle: String) -> Self {
+    pub fn new(selected: bool, title: String, subtitle: String) -> Self {
         ListItem {
+            selected,
             title: title.into(),
             subtitle: subtitle.into(),
         }
@@ -151,7 +207,7 @@ impl RenderOnce for ListItem {
         div()
             .flex()
             .flex_col()
-            .bg(rgb(0x2a2a2a))
+            .when(self.selected, |this| this.bg(rgb(0x2a2a2a)))
             .items_start()
             .p_2()
             .m_2()
