@@ -23,17 +23,11 @@ pub struct Root {
 impl Root {
     pub fn new(cx: &mut ViewContext<Self>) -> Self {
         // query view
-        let query_view = cx.new_view(|cx| {
-            let test_input = TextInput::new(cx);
-            test_input
-        });
+        let query_view = cx.new_view(|cx| TextInput::new(cx));
         cx.subscribe(&query_view, Self::on_input_event).detach();
 
         // state model
-        let state_model = cx.new_model(|_cx| State {
-            selected_id: 0,
-            items: vec![],
-        });
+        let state_model = cx.new_model(|_cx| State::new());
 
         // list state
         let list_state = ListState::new(0, ListAlignment::Top, Pixels(20.), {
@@ -47,6 +41,8 @@ impl Root {
                 div().child(item).into_any_element()
             }
         });
+
+        cx.focus_self();
 
         Self {
             query_view,
@@ -168,6 +164,13 @@ struct State {
 }
 
 impl State {
+    fn new() -> Self {
+        Self {
+            selected_id: 0,
+            items: vec![],
+        }
+    }
+
     fn reset(&mut self) {
         self.selected_id = 0;
         self.items.clear();
