@@ -13,8 +13,8 @@ pub fn init(cx: &mut App) {
 }
 
 pub struct Root {
-    query_view: Entity<TextInput>,
-    state_model: Entity<State>,
+    query: Entity<TextInput>,
+    state: Entity<State>,
     list_state: ListState,
     _update_list_task: Option<Task<()>>,
     _open_application_task: Option<Task<()>>,
@@ -22,18 +22,18 @@ pub struct Root {
 
 impl Root {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        // query view
-        let query_view = cx.new(|cx| TextInput::new(window, cx));
-        cx.subscribe(&query_view, Self::on_input_event).detach();
+        // query
+        let query = cx.new(|cx| TextInput::new(window, cx));
+        cx.subscribe(&query, Self::on_input_event).detach();
 
-        // state model
-        let state_model = cx.new(|_cx| State::new());
+        // state
+        let state = cx.new(|_cx| State::new());
 
         // list state
         let list_state = ListState::new(0, ListAlignment::Top, Pixels(20.), {
-            let state_model = state_model.clone();
+            let state = state.clone();
             move |idx, _window, cx| {
-                let state = state_model.read(cx);
+                let state = state.read(cx);
                 let mut item = state.items.get(idx).unwrap().clone();
                 if idx == state.selected_id {
                     item.select();
@@ -45,8 +45,8 @@ impl Root {
         cx.focus_self(window);
 
         Self {
-            query_view,
-            state_model,
+            query,
+            state,
             list_state,
             _update_list_task: Some(cx.spawn(Self::do_update_list_task)),
             _open_application_task: None,
@@ -55,7 +55,7 @@ impl Root {
 
     fn on_input_event(
         &mut self,
-        _text_input_view: Entity<TextInput>,
+        _text_input: Entity<TextInput>,
         input_event: &InputEvent,
         cx: &mut Context<Self>,
     ) {
@@ -71,16 +71,16 @@ impl Root {
     }
 
     // do async
-    async fn do_update_list_task(root_weak_view: WeakEntity<Self>, mut cx: AsyncApp) {
-        root_weak_view.update(&mut cx, Self::update_list).unwrap();
+    async fn do_update_list_task(root_weak_entity: WeakEntity<Self>, mut cx: AsyncApp) {
+        root_weak_entity.update(&mut cx, Self::update_list).unwrap();
     }
 
     fn update_list(&mut self, cx: &mut Context<Self>) {
-        self.state_model.update(cx, |state, cx| {
+        self.state.update(cx, |state, cx| {
             state.reset();
 
             if let Ok(entries) = std::fs::read_dir("/Applications") {
-                let text_content = self.query_view.read(cx).text();
+                let text_content = self.query.read(cx).text();
                 for entry in entries {
                     if let Ok(entry) = entry {
                         let path = entry.path();
@@ -106,14 +106,14 @@ impl Root {
     }
 
     // do async
-    async fn do_open_application_task(root_weak_view: WeakEntity<Self>, mut cx: AsyncApp) {
-        root_weak_view
+    async fn do_open_application_task(root_weak_entity: WeakEntity<Self>, mut cx: AsyncApp) {
+        root_weak_entity
             .update(&mut cx, Self::open_application)
             .unwrap();
     }
 
     fn open_application(&mut self, cx: &mut Context<Self>) {
-        let state = self.state_model.read(cx);
+        let state = self.state.read(cx);
         if let Some(item) = state.items.get(state.selected_id) {
             let _ = std::process::Command::new("open")
                 .arg("-a")
@@ -123,22 +123,22 @@ impl Root {
     }
 
     fn select_last(&mut self, _: &Up, _window: &mut Window, cx: &mut Context<Self>) {
-        self.state_model.update(cx, State::up);
-        let selected_id = self.state_model.read(cx).selected_id;
+        self.state.update(cx, State::up);
+        let selected_id = self.state.read(cx).selected_id;
         self.list_state.scroll_to_reveal_item(selected_id);
         cx.notify();
     }
 
     fn select_next(&mut self, _: &Down, _window: &mut Window, cx: &mut Context<Self>) {
-        self.state_model.update(cx, State::down);
-        let selected_id = self.state_model.read(cx).selected_id;
+        self.state.update(cx, State::down);
+        let selected_id = self.state.read(cx).selected_id;
         self.list_state.scroll_to_reveal_item(selected_id);
         cx.notify();
     }
 }
 
 impl Render for Root {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .key_context(CONTEXT)
             .on_action(cx.listener(Self::select_last))
@@ -146,14 +146,14 @@ impl Render for Root {
             .size_full()
             .flex()
             .flex_col()
-            .child(self.query_view.clone())
+            .child(self.query.clone())
             .child(list(self.list_state.clone()).w_full().h_full())
     }
 }
 
 impl Focusable for Root {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.query_view.focus_handle(cx)
+        self.query.focus_handle(cx)
     }
 }
 
@@ -221,7 +221,7 @@ impl ListItem {
 }
 
 impl RenderOnce for ListItem {
-    fn render(self, _: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
