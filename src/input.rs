@@ -1,11 +1,11 @@
-use component::input::{InputEvent, TextInput};
 use gpui::*;
+use gpui_component::input::{InputEvent, TextInput};
 use prelude::FluentBuilder;
 
 const CONTEXT: &str = "root";
 actions!(root, [Up, Down]);
 
-pub fn init(cx: &mut AppContext) {
+pub fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("up", Up, Some(CONTEXT)),
         KeyBinding::new("down", Down, Some(CONTEXT)),
@@ -13,26 +13,26 @@ pub fn init(cx: &mut AppContext) {
 }
 
 pub struct Root {
-    query_view: View<TextInput>,
-    state_model: Model<State>,
+    query_view: Entity<TextInput>,
+    state_model: Entity<State>,
     list_state: ListState,
     _update_list_task: Option<Task<()>>,
     _open_application_task: Option<Task<()>>,
 }
 
 impl Root {
-    pub fn new(cx: &mut ViewContext<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         // query view
-        let query_view = cx.new_view(|cx| TextInput::new(cx));
+        let query_view = cx.new(|cx| TextInput::new(window, cx));
         cx.subscribe(&query_view, Self::on_input_event).detach();
 
         // state model
-        let state_model = cx.new_model(|_cx| State::new());
+        let state_model = cx.new(|_cx| State::new());
 
         // list state
         let list_state = ListState::new(0, ListAlignment::Top, Pixels(20.), {
             let state_model = state_model.clone();
-            move |idx, cx| {
+            move |idx, _window, cx| {
                 let state = state_model.read(cx);
                 let mut item = state.items.get(idx).unwrap().clone();
                 if idx == state.selected_id {
@@ -42,7 +42,7 @@ impl Root {
             }
         });
 
-        cx.focus_self();
+        cx.focus_self(window);
 
         Self {
             query_view,
@@ -55,9 +55,9 @@ impl Root {
 
     fn on_input_event(
         &mut self,
-        _text_input_view: View<TextInput>,
+        _text_input_view: Entity<TextInput>,
         input_event: &InputEvent,
-        cx: &mut ViewContext<Self>,
+        cx: &mut Context<Self>,
     ) {
         match input_event {
             InputEvent::Change(_text) => {
@@ -71,11 +71,11 @@ impl Root {
     }
 
     // do async
-    async fn do_update_list_task(root_weak_view: WeakView<Self>, mut cx: AsyncWindowContext) {
+    async fn do_update_list_task(root_weak_view: WeakEntity<Self>, mut cx: AsyncApp) {
         root_weak_view.update(&mut cx, Self::update_list).unwrap();
     }
 
-    fn update_list(&mut self, cx: &mut ViewContext<Self>) {
+    fn update_list(&mut self, cx: &mut Context<Self>) {
         self.state_model.update(cx, |state, cx| {
             state.reset();
 
@@ -106,13 +106,13 @@ impl Root {
     }
 
     // do async
-    async fn do_open_application_task(root_weak_view: WeakView<Self>, mut cx: AsyncWindowContext) {
+    async fn do_open_application_task(root_weak_view: WeakEntity<Self>, mut cx: AsyncApp) {
         root_weak_view
             .update(&mut cx, Self::open_application)
             .unwrap();
     }
 
-    fn open_application(&mut self, cx: &mut ViewContext<Self>) {
+    fn open_application(&mut self, cx: &mut Context<Self>) {
         let state = self.state_model.read(cx);
         if let Some(item) = state.items.get(state.selected_id) {
             let _ = std::process::Command::new("open")
@@ -122,14 +122,14 @@ impl Root {
         }
     }
 
-    fn select_last(&mut self, _: &Up, cx: &mut ViewContext<Self>) {
+    fn select_last(&mut self, _: &Up, _window: &mut Window, cx: &mut Context<Self>) {
         self.state_model.update(cx, State::up);
         let selected_id = self.state_model.read(cx).selected_id;
         self.list_state.scroll_to_reveal_item(selected_id);
         cx.notify();
     }
 
-    fn select_next(&mut self, _: &Down, cx: &mut ViewContext<Self>) {
+    fn select_next(&mut self, _: &Down, _window: &mut Window, cx: &mut Context<Self>) {
         self.state_model.update(cx, State::down);
         let selected_id = self.state_model.read(cx).selected_id;
         self.list_state.scroll_to_reveal_item(selected_id);
@@ -138,7 +138,7 @@ impl Root {
 }
 
 impl Render for Root {
-    fn render(&mut self, cx: &mut ViewContext<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .key_context(CONTEXT)
             .on_action(cx.listener(Self::select_last))
@@ -151,8 +151,8 @@ impl Render for Root {
     }
 }
 
-impl FocusableView for Root {
-    fn focus_handle(&self, cx: &gpui::AppContext) -> gpui::FocusHandle {
+impl Focusable for Root {
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
         self.query_view.focus_handle(cx)
     }
 }
@@ -176,7 +176,7 @@ impl State {
         self.items.clear();
     }
 
-    fn up(&mut self, _cx: &mut ModelContext<Self>) {
+    fn up(&mut self, _cx: &mut Context<Self>) {
         if self.items.len() == 0 {
             return;
         }
@@ -187,7 +187,7 @@ impl State {
         }
     }
 
-    fn down(&mut self, _cx: &mut ModelContext<Self>) {
+    fn down(&mut self, _cx: &mut Context<Self>) {
         if self.items.len() == 0 {
             return;
         }
@@ -221,7 +221,7 @@ impl ListItem {
 }
 
 impl RenderOnce for ListItem {
-    fn render(self, _cx: &mut WindowContext) -> impl IntoElement {
+    fn render(self, _: &mut Window, _cx: &mut App) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
