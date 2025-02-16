@@ -1,11 +1,8 @@
 # README
 
-on_xx_event
+update_xx?
 
-do_xx_task(self task / common task)
+on_xx_event(event)
+on_xx_notify(entity)
 
-update_xx_model
-update_xx_view
-
-on_xx_model_notify
-on_xx_view_notify
+do_xx_task(self_task/common_task)

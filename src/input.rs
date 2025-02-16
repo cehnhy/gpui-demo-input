@@ -42,8 +42,6 @@ impl Root {
             }
         });
 
-        cx.focus_self(window);
-
         Self {
             query,
             state,
@@ -53,9 +51,10 @@ impl Root {
         }
     }
 
+    // on input event
     fn on_input_event(
         &mut self,
-        _text_input: Entity<TextInput>,
+        _query: Entity<TextInput>,
         input_event: &InputEvent,
         cx: &mut Context<Self>,
     ) {
@@ -70,11 +69,10 @@ impl Root {
         };
     }
 
-    // do async
-    async fn do_update_list_task(root_weak_entity: WeakEntity<Self>, mut cx: AsyncApp) {
-        root_weak_entity.update(&mut cx, Self::update_list).unwrap();
+    // do async task
+    async fn do_update_list_task(self_weak_entity: WeakEntity<Self>, mut cx: AsyncApp) {
+        self_weak_entity.update(&mut cx, Self::update_list).unwrap();
     }
-
     fn update_list(&mut self, cx: &mut Context<Self>) {
         self.state.update(cx, |state, cx| {
             state.reset();
@@ -105,13 +103,12 @@ impl Root {
         });
     }
 
-    // do async
-    async fn do_open_application_task(root_weak_entity: WeakEntity<Self>, mut cx: AsyncApp) {
-        root_weak_entity
+    // do async task
+    async fn do_open_application_task(self_weak_entity: WeakEntity<Self>, mut cx: AsyncApp) {
+        self_weak_entity
             .update(&mut cx, Self::open_application)
             .unwrap();
     }
-
     fn open_application(&mut self, cx: &mut Context<Self>) {
         let state = self.state.read(cx);
         if let Some(item) = state.items.get(state.selected_id) {
@@ -122,14 +119,14 @@ impl Root {
         }
     }
 
-    fn select_last(&mut self, _: &Up, _window: &mut Window, cx: &mut Context<Self>) {
+    fn select_last_item(&mut self, _: &Up, _window: &mut Window, cx: &mut Context<Self>) {
         self.state.update(cx, State::up);
         let selected_id = self.state.read(cx).selected_id;
         self.list_state.scroll_to_reveal_item(selected_id);
         cx.notify();
     }
 
-    fn select_next(&mut self, _: &Down, _window: &mut Window, cx: &mut Context<Self>) {
+    fn select_next_item(&mut self, _: &Down, _window: &mut Window, cx: &mut Context<Self>) {
         self.state.update(cx, State::down);
         let selected_id = self.state.read(cx).selected_id;
         self.list_state.scroll_to_reveal_item(selected_id);
@@ -141,8 +138,8 @@ impl Render for Root {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .key_context(CONTEXT)
-            .on_action(cx.listener(Self::select_last))
-            .on_action(cx.listener(Self::select_next))
+            .on_action(cx.listener(Self::select_last_item))
+            .on_action(cx.listener(Self::select_next_item))
             .size_full()
             .flex()
             .flex_col()
