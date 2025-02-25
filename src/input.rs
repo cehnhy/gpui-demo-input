@@ -143,7 +143,7 @@ impl Render for Root {
             .size_full()
             .flex()
             .flex_col()
-            .child(self.query.clone())
+            .child(div().m_2().child(self.query.clone()))
             .child(list(self.list_state.clone()).w_full().h_full())
     }
 }
