@@ -62,7 +62,7 @@ impl Root {
             InputEvent::Change(_text) => {
                 self._update_list_task = Some(cx.spawn(Self::do_update_list_task))
             }
-            InputEvent::PressEnter => {
+            InputEvent::PressEnter { .. } => {
                 self._open_application_task = Some(cx.spawn(Self::do_open_application_task))
             }
             _ => {}
@@ -70,8 +70,8 @@ impl Root {
     }
 
     // do async task
-    async fn do_update_list_task(self_weak_entity: WeakEntity<Self>, mut cx: AsyncApp) {
-        self_weak_entity.update(&mut cx, Self::update_list).unwrap();
+    async fn do_update_list_task(self_weak_entity: WeakEntity<Self>, cx: &mut AsyncApp) {
+        self_weak_entity.update(cx, Self::update_list).unwrap();
     }
     fn update_list(&mut self, cx: &mut Context<Self>) {
         self.state.update(cx, |state, cx| {
@@ -104,10 +104,8 @@ impl Root {
     }
 
     // do async task
-    async fn do_open_application_task(self_weak_entity: WeakEntity<Self>, mut cx: AsyncApp) {
-        self_weak_entity
-            .update(&mut cx, Self::open_application)
-            .unwrap();
+    async fn do_open_application_task(self_weak_entity: WeakEntity<Self>, cx: &mut AsyncApp) {
+        self_weak_entity.update(cx, Self::open_application).unwrap();
     }
     fn open_application(&mut self, cx: &mut Context<Self>) {
         let state = self.state.read(cx);
