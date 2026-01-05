@@ -31,17 +31,7 @@ impl Root {
         let state = cx.new(|_cx| State::new());
 
         // list state
-        let list_state = ListState::new(0, ListAlignment::Top, Pixels(20.), {
-            let state = state.clone();
-            move |idx, _window, cx| {
-                let state = state.read(cx);
-                let mut item = state.items.get(idx).unwrap().clone();
-                if idx == state.selected_id {
-                    item.select();
-                }
-                div().child(item).into_any_element()
-            }
-        });
+        let list_state = ListState::new(0, ListAlignment::Top, Pixels(20.));
 
         Self {
             query,
@@ -60,7 +50,7 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         match input_event {
-            InputEvent::Change(_text) => {
+            InputEvent::Change => {
                 self._update_list_task = Some(cx.spawn(Self::do_update_list_task))
             }
             InputEvent::PressEnter { .. } => {
@@ -145,11 +135,21 @@ impl Render for Root {
             .bg(rgb(0x000000))
             .child(div().p_2().child(TextInput::new(&self.query)))
             .child(
-                div()
-                    .flex_1()
-                    .pb_2()
-                    .px_2()
-                    .child(list(self.list_state.clone()).size_full()),
+                div().flex_1().pb_2().px_2().child(
+                    list(
+                        self.list_state.clone(),
+                        cx.processor(|root, idx, _window, app| {
+                            let state = root.state.read(app);
+                            let item: &ListItem = state.items.get(idx).unwrap();
+                            let mut item = item.clone();
+                            if idx == state.selected_id {
+                                item.select();
+                            }
+                            div().child(item).into_any_element()
+                        }),
+                    )
+                    .size_full(),
+                ),
             )
     }
 }
