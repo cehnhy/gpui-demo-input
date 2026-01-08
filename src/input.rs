@@ -1,7 +1,8 @@
+use freedesktop_desktop_entry::{default_paths, get_languages_from_env, Iter};
 use gpui::*;
-use gpui_component::input::{InputEvent, InputState, TextInput};
+use gpui_component::input::{Input, InputEvent, InputState};
 use prelude::FluentBuilder;
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Instant};
 
 const CONTEXT: &str = "root";
 actions!(root, [Up, Down]);
@@ -31,7 +32,7 @@ impl Root {
         let state = cx.new(|_cx| State::new());
 
         // list state
-        let list_state = ListState::new(0, ListAlignment::Top, Pixels(20.));
+        let list_state = ListState::new(0, ListAlignment::Top, px(20.));
 
         Self {
             query,
@@ -65,33 +66,81 @@ impl Root {
         self_weak_entity.update(cx, Self::update_list).unwrap();
     }
     fn update_list(&mut self, cx: &mut Context<Self>) {
+        let now = Instant::now();
         self.state.update(cx, |state, cx| {
             state.reset();
 
-            if let Ok(entries) = std::fs::read_dir("/Applications") {
-                let text_content = self.query.read(cx).value();
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        let path = entry.path();
-                        let file_name = path.file_name().unwrap().to_str().unwrap();
-                        if file_name.ends_with(".app")
-                            && (file_name
-                                .to_lowercase()
-                                .contains(&text_content.to_lowercase())
-                                || text_content.is_empty())
-                        {
-                            state.items.push(ListItem::new(
-                                file_name.to_string(),
-                                path.display().to_string(),
-                            ));
+            #[cfg(target_os = "macos")]
+            {
+                if let Ok(entries) = std::fs::read_dir("/Applications") {
+                    let text_content = self.query.read(cx).value();
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            let path = entry.path();
+                            let file_name = path.file_name().unwrap().to_str().unwrap();
+                            if file_name.ends_with(".app")
+                                && (file_name
+                                    .to_lowercase()
+                                    .contains(&text_content.to_lowercase())
+                                    || text_content.is_empty())
+                            {
+                                state.items.push(ListItem::new(
+                                    file_name.to_string(),
+                                    path.display().to_string(),
+                                    PathBuf::from(""),
+                                ));
+                            }
                         }
                     }
+                }
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                let text_content = self.query.read(cx).value();
+
+                let locales = get_languages_from_env();
+                let entries = Iter::new(default_paths())
+                    .entries(Some(&locales))
+                    .collect::<Vec<_>>();
+                for entry in entries {
+                    if entry.no_display() {
+                        continue;
+                    }
+
+                    let title = match entry.name(&locales) {
+                        Some(name) => name.to_string(),
+                        None => continue,
+                    };
+
+                    if !title.to_lowercase().contains(&text_content.to_lowercase()) {
+                        continue;
+                    }
+
+                    let sub_title = match entry.exec() {
+                        Some(exec) => exec.to_string(),
+                        None => continue,
+                    };
+
+                    let mut icon = PathBuf::from("");
+                    if let Some(icon_path) = entry.icon() {
+                        if let Some(found_icon) = freedesktop_icons::lookup(&icon_path)
+                            .with_cache()
+                            .with_size(48)
+                            .find()
+                        {
+                            icon = found_icon;
+                        }
+                    }
+
+                    state.items.push(ListItem::new(title, sub_title, icon));
                 }
             }
 
             self.list_state.reset(state.items.len());
             cx.notify();
         });
+        println!("Update list took {:?}", now.elapsed());
     }
 
     // do async task
@@ -101,10 +150,30 @@ impl Root {
     fn open_application(&mut self, cx: &mut Context<Self>) {
         let state = self.state.read(cx);
         if let Some(item) = state.items.get(state.selected_id) {
-            let _ = std::process::Command::new("open")
-                .arg("-a")
-                .arg(item.subtitle.as_ref())
-                .output();
+            #[cfg(target_os = "macos")]
+            {
+                let _ = std::process::Command::new("open")
+                    .arg("-a")
+                    .arg(item.subtitle.as_ref())
+                    .output();
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                // Parse the Exec field to remove field codes (%f, %F, %u, %U, etc.)
+                let exec_cmd = item.subtitle.as_ref();
+                let parts: Vec<&str> = exec_cmd.split_whitespace().collect();
+
+                if let Some(command) = parts.first() {
+                    let args: Vec<&str> = parts[1..]
+                        .iter()
+                        .filter(|arg| !arg.starts_with('%'))
+                        .copied()
+                        .collect();
+
+                    let _ = std::process::Command::new(command).args(&args).spawn();
+                }
+            }
         }
     }
 
@@ -133,7 +202,7 @@ impl Render for Root {
             .flex()
             .flex_col()
             .bg(rgb(0x000000))
-            .child(div().p_2().child(TextInput::new(&self.query)))
+            .child(div().p_2().child(Input::new(&self.query)))
             .child(
                 div().flex_1().pb_2().px_2().child(
                     list(
@@ -207,14 +276,16 @@ pub struct ListItem {
     selected: bool,
     title: SharedString,
     subtitle: SharedString,
+    icon: PathBuf,
 }
 
 impl ListItem {
-    pub fn new(title: String, subtitle: String) -> Self {
+    pub fn new(title: String, subtitle: String, icon: PathBuf) -> Self {
         ListItem {
             selected: false,
             title: title.into(),
             subtitle: subtitle.into(),
+            icon,
         }
     }
 
@@ -229,19 +300,15 @@ impl RenderOnce for ListItem {
             .flex()
             .flex_row()
             .when(self.selected, |this| this.bg(rgb(0x2a2a2a)))
-            .items_start()
+            .items_center()
+            .gap_1()
             .my_0p5()
+            .pl_1()
             .rounded_md()
             .hover(|s| s.bg(rgb(0x3a3a3a)))
             .text_color(rgb(0xffffff))
             .text_xl()
-            .child(
-                img(PathBuf::from(
-                    "./app-icon.png", // TODO
-                ))
-                .h(px(56.0))
-                .w(px(56.0)),
-            )
+            .child(img(self.icon).h(px(40.0)).w(px(40.0)))
             .child(
                 div()
                     .flex()
