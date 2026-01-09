@@ -1,33 +1,74 @@
 {
+  description = "Building static binaries with musl";
+
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+
+    crane.url = "github:ipetkov/crane";
+
+    flake-utils.url = "github:numtide/flake-utils";
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     {
       nixpkgs,
+      crane,
+      flake-utils,
+      rust-overlay,
       ...
     }:
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
-    in
-    {
-      devShells.${system}.default = pkgs.mkShell {
-        buildInputs = with pkgs; [
-          libxkbcommon
-          libxcb
-          wayland
-          vulkan-loader
-        ];
-        shellHook = ''
-          export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath (with pkgs; [
-            libxkbcommon
+    flake-utils.lib.eachSystem [ "x86_64-linux" ] (
+      system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ (import rust-overlay) ];
+        };
+
+        craneLib = (crane.mkLib pkgs).overrideToolchain (
+          p:
+          p.rust-bin.stable.latest.default.override {
+            targets = [ "x86_64-unknown-linux-gnu" ];
+          }
+        );
+
+        my-crate = craneLib.buildPackage {
+          src = craneLib.cleanCargoSource ./.;
+          strictDeps = true;
+
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+          ];
+
+          buildInputs = with pkgs; [
             libxcb
+            libxkbcommon
+          ];
+        };
+      in
+      {
+        checks = {
+          inherit my-crate;
+        };
+
+        packages.default = my-crate;
+
+        devShells.default = craneLib.devShell {
+          inputsFrom = [ my-crate ];
+          packages = with pkgs; [
             wayland
             vulkan-loader
-          ])}:$LD_LIBRARY_PATH
-        '';
-      };
-    };
+          ];
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
+            wayland
+            vulkan-loader
+          ]);
+        };
+      }
+    );
 }
