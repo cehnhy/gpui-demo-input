@@ -48,7 +48,18 @@
           buildInputs = with pkgs; [
             libxcb
             libxkbcommon
+            wayland
+            vulkan-loader
           ];
+
+          NIX_LDFLAGS = "-rpath ${
+            pkgs.lib.makeLibraryPath [
+              pkgs.wayland
+              pkgs.vulkan-loader
+            ]
+          }";
+
+          dontPatchELF = true;
         };
       in
       {
