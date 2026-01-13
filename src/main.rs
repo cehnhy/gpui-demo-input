@@ -1,6 +1,6 @@
 mod input;
 
-use gpui::*;
+use gpui::{layer_shell::*, *};
 use input::Root;
 
 fn main() {
@@ -13,18 +13,21 @@ fn main() {
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 titlebar: None,
+                kind: WindowKind::LayerShell(LayerShellOptions {
+                    namespace: "gpui".to_string(),
+                    layer: Layer::Top,
+                    anchor: Anchor::LEFT | Anchor::RIGHT | Anchor::BOTTOM | Anchor::TOP,
+                    exclusive_zone: None,
+                    exclusive_edge: None,
+                    margin: Some((px(10.), px(10.), px(10.), px(10.))),
+                    keyboard_interactivity: KeyboardInteractivity::OnDemand,
+                }),
                 ..Default::default()
             },
             |window, cx| {
                 cx.new(|cx| {
                     let root = cx.new(|cx| {
                         let root = Root::new(window, cx);
-                        cx.observe_window_activation(window, |_, window, _cx| {
-                            if !window.is_window_active() {
-                                window.remove_window();
-                            }
-                        })
-                        .detach();
                         cx.focus_self(window);
                         root
                     });

@@ -33,6 +33,7 @@
         craneLib = (crane.mkLib pkgs).overrideToolchain (
           p:
           p.rust-bin.stable.latest.default.override {
+            extensions = [ "rust-src" ];
             targets = [ "x86_64-unknown-linux-gnu" ];
           }
         );
