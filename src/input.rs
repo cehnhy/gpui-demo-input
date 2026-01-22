@@ -5,16 +5,18 @@ use prelude::FluentBuilder;
 use std::{path::PathBuf, time::Instant};
 
 const CONTEXT: &str = "root";
-actions!(root, [Up, Down]);
+actions!(root, [Up, Down, ESC]);
 
 pub fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("up", Up, Some(CONTEXT)),
         KeyBinding::new("down", Down, Some(CONTEXT)),
+        KeyBinding::new("escape", ESC, Some(CONTEXT)),
     ]);
 }
 
 pub struct Root {
+    window_handle: AnyWindowHandle,
     query: Entity<InputState>,
     state: Entity<State>,
     list_state: ListState,
@@ -24,6 +26,7 @@ pub struct Root {
 
 impl Root {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let window_handle = window.window_handle();
         // query
         let query = cx.new(|cx| InputState::new(window, cx));
         cx.subscribe(&query, Self::on_input_event).detach();
@@ -35,6 +38,7 @@ impl Root {
         let list_state = ListState::new(0, ListAlignment::Top, px(20.));
 
         Self {
+            window_handle,
             query,
             state,
             list_state,
@@ -108,16 +112,21 @@ impl Root {
                         continue;
                     }
 
-                    let title = match entry.name(&locales) {
+                    let name = match entry.name(&locales) {
                         Some(name) => name.to_string(),
                         None => continue,
                     };
 
-                    if !title.to_lowercase().contains(&text_content.to_lowercase()) {
+                    if !name.to_lowercase().contains(&text_content.to_lowercase()) {
                         continue;
                     }
 
-                    let sub_title = match entry.exec() {
+                    let comment = match entry.comment(&locales) {
+                        Some(comment) => comment.to_string(),
+                        None => continue,
+                    };
+
+                    let action = match entry.exec() {
                         Some(exec) => exec.to_string(),
                         None => continue,
                     };
@@ -133,7 +142,7 @@ impl Root {
                         }
                     }
 
-                    state.items.push(ListItem::new(title, sub_title, icon));
+                    state.items.push(ListItem::new(name, comment, action, icon));
                 }
             }
 
@@ -161,7 +170,7 @@ impl Root {
             #[cfg(target_os = "linux")]
             {
                 // Parse the Exec field to remove field codes (%f, %F, %u, %U, etc.)
-                let exec_cmd = item.subtitle.as_ref();
+                let exec_cmd = item.action.as_ref();
                 let parts: Vec<&str> = exec_cmd.split_whitespace().collect();
 
                 if let Some(command) = parts.first() {
@@ -174,6 +183,11 @@ impl Root {
                     let _ = std::process::Command::new(command).args(&args).spawn();
                 }
             }
+
+            cx.update_window(self.window_handle, |_, window, _| {
+                window.remove_window();
+            })
+            .unwrap();
         }
     }
 
@@ -190,35 +204,60 @@ impl Root {
         self.list_state.scroll_to_reveal_item(selected_id);
         cx.notify();
     }
+
+    fn cancel(&mut self, _: &ESC, window: &mut Window, _cx: &mut Context<Self>) {
+        window.remove_window();
+    }
 }
 
 impl Render for Root {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
-            .key_context(CONTEXT)
-            .on_action(cx.listener(Self::select_last_item))
-            .on_action(cx.listener(Self::select_next_item))
-            .size_full()
             .flex()
-            .flex_col()
-            .bg(rgb(0x000000))
-            .child(div().p_2().child(Input::new(&self.query)))
+            .items_center()
+            .justify_center()
+            .size_full()
+            .on_mouse_down(gpui::MouseButton::Left, move |_event, window, _cx| {
+                window.remove_window();
+            })
             .child(
-                div().flex_1().pb_2().px_2().child(
-                    list(
-                        self.list_state.clone(),
-                        cx.processor(|root, idx, _window, app| {
-                            let state = root.state.read(app);
-                            let item: &ListItem = state.items.get(idx).unwrap();
-                            let mut item = item.clone();
-                            if idx == state.selected_id {
-                                item.select();
-                            }
-                            div().child(item).into_any_element()
-                        }),
+                div()
+                    .key_context(CONTEXT)
+                    .on_action(cx.listener(Self::select_last_item))
+                    .on_action(cx.listener(Self::select_next_item))
+                    .on_action(cx.listener(Self::cancel))
+                    .w(px(800.0))
+                    .h(px(464.0))
+                    .flex()
+                    .flex_col()
+                    .bg(rgba(0x1E1E1EFF))
+                    .rounded(px(10.0))
+                    .overflow_hidden()
+                    .on_mouse_down(gpui::MouseButton::Left, |_event, _window, cx| {
+                        cx.stop_propagation();
+                    })
+                    .child(
+                        div()
+                            .p_2()
+                            .child(Input::new(&self.query).bg(rgba(0x1E1E1EFF))),
                     )
-                    .size_full(),
-                ),
+                    .child(
+                        div().flex_1().pb_2().px_2().child(
+                            list(
+                                self.list_state.clone(),
+                                cx.processor(|root, idx, _window, app| {
+                                    let state = root.state.read(app);
+                                    let item: &ListItem = state.items.get(idx).unwrap();
+                                    let mut item = item.clone();
+                                    if idx == state.selected_id {
+                                        item.select();
+                                    }
+                                    div().child(item).into_any_element()
+                                }),
+                            )
+                            .size_full(),
+                        ),
+                    ),
             )
     }
 }
@@ -276,15 +315,17 @@ pub struct ListItem {
     selected: bool,
     title: SharedString,
     subtitle: SharedString,
+    action: SharedString,
     icon: PathBuf,
 }
 
 impl ListItem {
-    pub fn new(title: String, subtitle: String, icon: PathBuf) -> Self {
+    pub fn new(title: String, subtitle: String, action: String, icon: PathBuf) -> Self {
         ListItem {
             selected: false,
             title: title.into(),
             subtitle: subtitle.into(),
+            action: action.into(),
             icon,
         }
     }
@@ -305,8 +346,8 @@ impl RenderOnce for ListItem {
             .my_0p5()
             .pl_1()
             .rounded_md()
-            .hover(|s| s.bg(rgb(0x3a3a3a)))
-            .text_color(rgb(0xffffff))
+            // .hover(|s| s.bg(rgb(0x3a3a3a)))
+            .text_color(rgb(0xCBCBCB))
             .text_xl()
             .child(img(self.icon).h(px(40.0)).w(px(40.0)))
             .child(
