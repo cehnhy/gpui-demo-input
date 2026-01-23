@@ -224,7 +224,7 @@ impl Render for Root {
 
         div()
             .flex()
-            .pt(px(350.0))
+            .pt(px(310.0))
             .items_start()
             .justify_center()
             .size_full()
