@@ -1,4 +1,5 @@
 mod input;
+mod query_parser;
 
 use gpui::{layer_shell::*, *};
 use gpui_component::Theme;
