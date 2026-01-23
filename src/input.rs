@@ -212,9 +212,20 @@ impl Root {
 
 impl Render for Root {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let mut h = 48;
+
+        let mut state_len = self.state.read(cx).items.len();
+        if state_len > 6 {
+            state_len = 6;
+        }
+        if state_len > 0 {
+            h += 8 + 59 * state_len
+        }
+
         div()
             .flex()
-            .items_center()
+            .pt(px(350.0))
+            .items_start()
             .justify_center()
             .size_full()
             .on_mouse_down(gpui::MouseButton::Left, move |_event, window, _cx| {
@@ -227,7 +238,7 @@ impl Render for Root {
                     .on_action(cx.listener(Self::select_next_item))
                     .on_action(cx.listener(Self::cancel))
                     .w(px(800.0))
-                    .h(px(464.0))
+                    .h(px(h as f32))
                     .flex()
                     .flex_col()
                     .bg(rgba(0x1E1E1EFF))
@@ -237,9 +248,12 @@ impl Render for Root {
                         cx.stop_propagation();
                     })
                     .child(
-                        div()
-                            .p_2()
-                            .child(Input::new(&self.query).bg(rgba(0x1E1E1EFF))),
+                        div().p_2().child(
+                            Input::new(&self.query)
+                                .border_1()
+                                .border_color(rgb(0x3a3a3a))
+                                .bg(rgba(0x1E1E1EFF)),
+                        ),
                     )
                     .child(
                         div().flex_1().pb_2().px_2().child(
