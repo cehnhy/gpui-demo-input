@@ -1,4 +1,4 @@
-use freedesktop_desktop_entry::{default_paths, get_languages_from_env, Iter};
+use crate::query_parser;
 use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
 use prelude::FluentBuilder;
@@ -74,76 +74,16 @@ impl Root {
         self.state.update(cx, |state, cx| {
             state.reset();
 
-            #[cfg(target_os = "macos")]
-            {
-                if let Ok(entries) = std::fs::read_dir("/Applications") {
-                    let text_content = self.query.read(cx).value();
-                    for entry in entries {
-                        if let Ok(entry) = entry {
-                            let path = entry.path();
-                            let file_name = path.file_name().unwrap().to_str().unwrap();
-                            if file_name.ends_with(".app")
-                                && (file_name
-                                    .to_lowercase()
-                                    .contains(&text_content.to_lowercase())
-                                    || text_content.is_empty())
-                            {
-                                state.items.push(ListItem::new(
-                                    file_name.to_string(),
-                                    path.display().to_string(),
-                                    PathBuf::from(""),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-
-            #[cfg(target_os = "linux")]
-            {
-                let text_content = self.query.read(cx).value();
-
-                let locales = get_languages_from_env();
-                let entries = Iter::new(default_paths())
-                    .entries(Some(&locales))
-                    .collect::<Vec<_>>();
-                for entry in entries {
-                    if entry.no_display() {
-                        continue;
-                    }
-
-                    let name = match entry.name(&locales) {
-                        Some(name) => name.to_string(),
-                        None => continue,
-                    };
-
-                    if !name.to_lowercase().contains(&text_content.to_lowercase()) {
-                        continue;
-                    }
-
-                    let comment = match entry.comment(&locales) {
-                        Some(comment) => comment.to_string(),
-                        None => continue,
-                    };
-
-                    let action = match entry.exec() {
-                        Some(exec) => exec.to_string(),
-                        None => continue,
-                    };
-
-                    let mut icon = PathBuf::from("");
-                    if let Some(icon_path) = entry.icon() {
-                        if let Some(found_icon) = freedesktop_icons::lookup(&icon_path)
-                            .with_cache()
-                            .with_size(48)
-                            .find()
-                        {
-                            icon = found_icon;
-                        }
-                    }
-
-                    state.items.push(ListItem::new(name, comment, action, icon));
-                }
+            let text_content = self.query.read(cx).value();
+            let query_parser = query_parser::to_query_parser(text_content.into());
+            let query_items = query_parser.parse();
+            for item in query_items {
+                state.items.push(ListItem::new(
+                    item.title,
+                    item.subtitle,
+                    item.action,
+                    item.icon,
+                ));
             }
 
             self.list_state.reset(state.items.len());
@@ -159,29 +99,18 @@ impl Root {
     fn open_application(&mut self, cx: &mut Context<Self>) {
         let state = self.state.read(cx);
         if let Some(item) = state.items.get(state.selected_id) {
-            #[cfg(target_os = "macos")]
-            {
-                let _ = std::process::Command::new("open")
-                    .arg("-a")
-                    .arg(item.subtitle.as_ref())
-                    .output();
-            }
+            // Parse the Exec field to remove field codes (%f, %F, %u, %U, etc.)
+            let exec_cmd = item.action.as_ref();
+            let parts: Vec<&str> = exec_cmd.split_whitespace().collect();
 
-            #[cfg(target_os = "linux")]
-            {
-                // Parse the Exec field to remove field codes (%f, %F, %u, %U, etc.)
-                let exec_cmd = item.action.as_ref();
-                let parts: Vec<&str> = exec_cmd.split_whitespace().collect();
+            if let Some(command) = parts.first() {
+                let args: Vec<&str> = parts[1..]
+                    .iter()
+                    .filter(|arg| !arg.starts_with('%'))
+                    .copied()
+                    .collect();
 
-                if let Some(command) = parts.first() {
-                    let args: Vec<&str> = parts[1..]
-                        .iter()
-                        .filter(|arg| !arg.starts_with('%'))
-                        .copied()
-                        .collect();
-
-                    let _ = std::process::Command::new(command).args(&args).spawn();
-                }
+                let _ = std::process::Command::new(command).args(&args).spawn();
             }
 
             cx.update_window(self.window_handle, |_, window, _| {
