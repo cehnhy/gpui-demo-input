@@ -283,13 +283,12 @@ impl RenderOnce for ListItem {
         div()
             .flex()
             .flex_row()
-            .when(self.selected, |this| this.bg(rgb(0x2a2a2a)))
             .items_center()
             .gap_1()
+            .when(self.selected, |this| this.bg(rgb(0x2a2a2a)))
             .my_0p5()
             .pl_1()
             .rounded_md()
-            // .hover(|s| s.bg(rgb(0x3a3a3a)))
             .text_color(rgb(0xCBCBCB))
             .text_xl()
             .child(img(self.icon).h(px(40.0)).w(px(40.0)))
@@ -298,8 +297,14 @@ impl RenderOnce for ListItem {
                     .flex()
                     .flex_col()
                     .size_full()
-                    .child(self.title.clone())
-                    .child(div().flex().text_sm().child(self.subtitle.clone())),
+                    .when(self.subtitle.is_empty(), |this| {
+                        this.child(div().child(self.title.clone()))
+                            .line_height(px(55.0))
+                    })
+                    .when(!self.subtitle.is_empty(), |this| {
+                        this.child(div().child(self.title.clone()))
+                            .child(div().text_sm().child(self.subtitle.clone()))
+                    }),
             )
     }
 }

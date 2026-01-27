@@ -1,3 +1,4 @@
+use chrono::Local;
 use freedesktop_desktop_entry::{default_paths, get_languages_from_env, Iter};
 use std::path::PathBuf;
 
@@ -38,16 +39,10 @@ impl QueryParser {
     pub fn parse(&self) -> Vec<QueryParserItem> {
         match self.trigger.as_str() {
             "application" => self.parse_application(),
-            "code" => {
-                vec![]
-            }
-            "float" => {
-                vec![]
-            }
+            "code" => self.parse_code(),
+            "float" => self.parse_float(),
             "time" => self.parse_time(),
-            _ => {
-                vec![]
-            }
+            _ => vec![],
         }
     }
 
@@ -105,9 +100,74 @@ impl QueryParser {
         items
     }
 
+    fn parse_code(&self) -> Vec<QueryParserItem> {
+        if self.args.is_empty() {
+            return vec![];
+        }
+        let arg = self.args[0].clone();
+
+        let output = std::process::Command::new("fd")
+            .arg("--max-results")
+            .arg("6")
+            .arg("-d")
+            .arg("2")
+            .arg("-t")
+            .arg("d")
+            .arg(&arg)
+            .arg(format!(
+                "{}/repo",
+                std::env::var("HOME").unwrap_or_default()
+            ))
+            .output();
+
+        let mut items = vec![];
+
+        if let Ok(output) = output {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if line.is_empty() {
+                        continue;
+                    }
+
+                    let path = PathBuf::from(line);
+                    let title = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(line)
+                        .to_string();
+
+                    let subtitle = path
+                        .parent()
+                        .and_then(|p| p.to_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    items.push(QueryParserItem {
+                        title,
+                        subtitle,
+                        action: format!("code {}", line),
+                        icon: PathBuf::from(""),
+                    });
+                }
+            }
+        }
+
+        items
+    }
+
+    fn parse_float(&self) -> Vec<QueryParserItem> {
+        return vec![QueryParserItem {
+            title: "toggle floating".to_string(),
+            subtitle: "".to_string(),
+            action: "hyprctl dispatch togglefloating".to_string(),
+            icon: PathBuf::from(""),
+        }];
+    }
+
     fn parse_time(&self) -> Vec<QueryParserItem> {
         return vec![QueryParserItem {
-            title: "1".to_string(),
+            title: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             subtitle: "".to_string(),
             action: "".to_string(),
             icon: PathBuf::from(""),

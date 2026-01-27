@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+chrono = "0.4.43"
 freedesktop-desktop-entry = "0.8.1"
 freedesktop-icons = "0.4.0"
 gpui = { git = "https://github.com/zed-industries/zed.git" }
