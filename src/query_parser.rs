@@ -160,7 +160,7 @@ impl QueryParser {
         return vec![QueryParserItem {
             title: "toggle floating".to_string(),
             subtitle: "".to_string(),
-            action: "hyprctl dispatch togglefloating".to_string(),
+            action: "niri msg action toggle-window-floating".to_string(),
             icon: PathBuf::from(""),
         }];
     }
