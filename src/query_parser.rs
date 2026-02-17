@@ -1,5 +1,6 @@
 use chrono::Local;
 use freedesktop_desktop_entry::{default_paths, get_languages_from_env, Iter};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 pub fn to_query_parser(query: String) -> QueryParser {
@@ -49,13 +50,36 @@ impl QueryParser {
     fn parse_application(&self) -> Vec<QueryParserItem> {
         let arg = self.args[0].clone();
         let mut items = vec![];
+        let mut seen_ids = HashSet::new();
 
         let locales = get_languages_from_env();
-        let entries = Iter::new(default_paths())
+
+        // Add NixOS-specific paths to the default paths
+        let mut paths: Vec<PathBuf> = default_paths().collect();
+        if let Ok(home) = std::env::var("HOME") {
+            paths.push(PathBuf::from(format!(
+                "{}/.nix-profile/share/applications",
+                home
+            )));
+        }
+
+        let entries = Iter::new(paths.into_iter())
             .entries(Some(&locales))
             .collect::<Vec<_>>();
         for entry in entries {
             if entry.no_display() {
+                continue;
+            }
+
+            // Get desktop file ID to deduplicate
+            let desktop_id = entry
+                .path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+
+            if !seen_ids.insert(desktop_id.to_string()) {
+                // Already seen this desktop file, skip it
                 continue;
             }
 
@@ -68,10 +92,10 @@ impl QueryParser {
                 continue;
             }
 
-            let comment = match entry.comment(&locales) {
-                Some(comment) => comment.to_string(),
-                None => continue,
-            };
+            let comment = entry
+                .comment(&locales)
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "".to_string());
 
             let action = match entry.exec() {
                 Some(exec) => exec.to_string(),
