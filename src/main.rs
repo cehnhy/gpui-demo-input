@@ -11,22 +11,24 @@ fn main() {
         input::init(cx);
 
         let theme = Theme::global_mut(cx);
-        theme.colors.foreground = hsla(0.0, 0.0, 0.79, 1.0);
+        theme.colors.foreground = hsla(0.0, 0.0, 0.8, 1.0);
         theme.background = hsla(0.0, 0.0, 0.0, 0.0);
 
-        let bounds = Bounds::centered(None, size(px(1920.0), px(1080.0)), cx);
         cx.open_window(
             WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
                 titlebar: None,
                 window_background: WindowBackgroundAppearance::Transparent,
                 kind: WindowKind::LayerShell(LayerShellOptions {
                     namespace: "gpui-demo-input".to_string(),
                     layer: Layer::Top,
-                    anchor: Anchor::LEFT | Anchor::RIGHT | Anchor::BOTTOM | Anchor::TOP,
+                    anchor: Anchor::TOP | Anchor::RIGHT | Anchor::BOTTOM | Anchor::LEFT,
                     exclusive_zone: None,
                     exclusive_edge: None,
-                    margin: Some((px(0.), px(0.), px(0.), px(0.))),
+                    // due to func window_border() in gpui's Root component set client inset to 12px,
+                    // and the window border size is 1px,
+                    // and layer shell doesn't support server side decorations,
+                    // so we need to set negative margin to make the window full screen.
+                    margin: Some((px(-13.), px(11.), px(11.), px(-13.))), 
                     keyboard_interactivity: KeyboardInteractivity::OnDemand,
                 }),
                 ..Default::default()
