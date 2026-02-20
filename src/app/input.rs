@@ -1,4 +1,4 @@
-use crate::query_parser;
+use crate::app::query_parser;
 use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
 use prelude::FluentBuilder;
