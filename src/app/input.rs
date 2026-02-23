@@ -72,20 +72,8 @@ impl Root {
     fn update_list(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
         self.state.update(cx, |state, cx| {
-            state.reset();
-
             let text_content = self.query.read(cx).value();
-            let query_parser = query_parser::to_query_parser(text_content.into());
-            let query_items = query_parser.parse();
-            for item in query_items {
-                state.items.push(ListItem::new(
-                    item.title,
-                    item.subtitle,
-                    item.action,
-                    item.icon,
-                ));
-            }
-
+            state.search(cx, &text_content);
             self.list_state.reset(state.items.len());
             cx.notify();
         });
@@ -98,21 +86,7 @@ impl Root {
     }
     fn open_application(&mut self, cx: &mut Context<Self>) {
         let state = self.state.read(cx);
-        if let Some(item) = state.items.get(state.selected_id) {
-            // Parse the Exec field to remove field codes (%f, %F, %u, %U, etc.)
-            let exec_cmd = item.action.as_ref();
-            let parts: Vec<&str> = exec_cmd.split_whitespace().collect();
-
-            if let Some(command) = parts.first() {
-                let args: Vec<&str> = parts[1..]
-                    .iter()
-                    .filter(|arg| !arg.starts_with('%'))
-                    .copied()
-                    .collect();
-
-                let _ = std::process::Command::new(command).args(&args).spawn();
-            }
-
+        if state.launch() {
             cx.update_window(self.window_handle, |_, window, _| {
                 window.remove_window();
             })
@@ -250,6 +224,40 @@ impl State {
         } else {
             self.selected_id = 0;
         }
+    }
+
+    pub fn search(&mut self, _cx: &mut Context<Self>, query: &str) {
+        self.reset();
+        let query_parser = query_parser::to_query_parser(query.into());
+        let query_items = query_parser.parse();
+        for item in query_items {
+            self.items.push(ListItem::new(
+                item.title,
+                item.subtitle,
+                item.action,
+                item.icon,
+            ));
+        }
+    }
+
+    pub fn launch(&self) -> bool {
+        if let Some(item) = self.items.get(self.selected_id) {
+            // Parse the Exec field to remove field codes (%f, %F, %u, %U, etc.)
+            let exec_cmd = item.action.as_ref();
+            let parts: Vec<&str> = exec_cmd.split_whitespace().collect();
+
+            if let Some(command) = parts.first() {
+                let args: Vec<&str> = parts[1..]
+                    .iter()
+                    .filter(|arg| !arg.starts_with('%'))
+                    .copied()
+                    .collect();
+
+                let _ = std::process::Command::new(command).args(&args).spawn();
+            }
+            return true;
+        }
+        false
     }
 }
 
