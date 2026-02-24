@@ -4,28 +4,25 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 pub fn to_query_parser(query: String) -> QueryParser {
-    let mut query_parser = QueryParser {
-        trigger: "application".to_string(),
-        args: vec!["".to_string()],
-    };
+    let mut query = query;
 
-    if query.is_empty() {
-        return query_parser;
+    let exist_triggers = vec!["code", "float", "time", "c"];
+    if !exist_triggers
+        .iter()
+        .any(|&p| query.starts_with(&format!("{} ", p)))
+    {
+        query = format!("application {}", query);
     }
 
-    let exist_triggers = vec!["code", "float", "time"];
     let mut args: Vec<String> = query.split(' ').map(|s| s.to_string()).collect();
-    if !exist_triggers.contains(&args[0].as_str()) {
-        args.insert(0, "application".to_string());
-    }
-    query_parser.trigger = args[0].clone();
-    query_parser.args = args[1..].to_vec();
-
-    return query_parser;
+    return QueryParser {
+        trigger: args.remove(0),
+        args,
+    };
 }
 
 pub struct QueryParser {
-    trigger: String, // application, code, float, time
+    trigger: String, // application, code, float, time, clip
     args: Vec<String>,
 }
 
@@ -43,6 +40,7 @@ impl QueryParser {
             "code" => self.parse_code(),
             "float" => self.parse_float(),
             "time" => self.parse_time(),
+            "c" => self.parse_clip(),
             _ => vec![],
         }
     }
@@ -196,5 +194,55 @@ impl QueryParser {
             action: "".to_string(),
             icon: PathBuf::from(""),
         }];
+    }
+
+    fn parse_clip(&self) -> Vec<QueryParserItem> {
+        if self.args.is_empty() {
+            return vec![];
+        }
+        let arg = self.args[0].clone();
+
+        let output = if arg.is_empty() {
+            std::process::Command::new("cliphist").arg("list").output()
+        } else {
+            std::process::Command::new("sh")
+                .arg("-c")
+                .arg(format!("cliphist list | grep -iF -- '{}'", arg))
+                .output()
+        };
+
+        let mut items = vec![];
+
+        if let Ok(output) = output {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if line.is_empty() {
+                        continue;
+                    }
+
+                    let content = line.splitn(2, '\t').nth(1).unwrap_or(line);
+
+                    let title = if content.len() > 80 {
+                        format!("{}...", &content[..80])
+                    } else {
+                        content.to_string()
+                    };
+
+                    items.push(QueryParserItem {
+                        title,
+                        subtitle: "".to_string(),
+                        action: format!("wl-copy {}", content),
+                        icon: PathBuf::from(""),
+                    });
+
+                    if items.len() >= 100 {
+                        break;
+                    }
+                }
+            }
+        }
+
+        items
     }
 }
