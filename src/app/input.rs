@@ -18,7 +18,7 @@ pub fn init(cx: &mut App) {
 pub struct Root {
     window_handle: AnyWindowHandle,
     query: Entity<InputState>,
-    state: Entity<State>,
+    state: Entity<Launcher>,
     list_state: ListState,
     _update_list_task: Option<Task<()>>,
     _open_application_task: Option<Task<()>>,
@@ -32,7 +32,7 @@ impl Root {
         cx.subscribe(&query, Self::on_input_event).detach();
 
         // state
-        let state = cx.new(|_cx| State::new());
+        let state = cx.new(|_cx| Launcher::new());
 
         // list state
         let list_state = ListState::new(0, ListAlignment::Top, px(20.));
@@ -95,14 +95,14 @@ impl Root {
     }
 
     fn select_last_item(&mut self, _: &Up, _window: &mut Window, cx: &mut Context<Self>) {
-        self.state.update(cx, State::up);
+        self.state.update(cx, Launcher::up);
         let selected_id = self.state.read(cx).selected_id;
         self.list_state.scroll_to_reveal_item(selected_id);
         cx.notify();
     }
 
     fn select_next_item(&mut self, _: &Down, _window: &mut Window, cx: &mut Context<Self>) {
-        self.state.update(cx, State::down);
+        self.state.update(cx, Launcher::down);
         let selected_id = self.state.read(cx).selected_id;
         self.list_state.scroll_to_reveal_item(selected_id);
         cx.notify();
@@ -186,12 +186,12 @@ impl Focusable for Root {
 }
 
 #[derive(Clone)]
-struct State {
+struct Launcher {
     selected_id: usize,
     items: Vec<ListItem>,
 }
 
-impl State {
+impl Launcher {
     fn new() -> Self {
         Self {
             selected_id: 0,
@@ -226,7 +226,7 @@ impl State {
         }
     }
 
-    pub fn search(&mut self, _cx: &mut Context<Self>, query: &str) {
+    fn search(&mut self, _cx: &mut Context<Self>, query: &str) {
         self.reset();
         let query_parser = query_parser::to_query_parser(query.into());
         let query_items = query_parser.parse();
@@ -240,7 +240,7 @@ impl State {
         }
     }
 
-    pub fn launch(&self) -> bool {
+    fn launch(&self) -> bool {
         if let Some(item) = self.items.get(self.selected_id) {
             // Parse the Exec field to remove field codes (%f, %F, %u, %U, etc.)
             let exec_cmd = item.action.as_ref();
