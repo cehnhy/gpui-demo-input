@@ -223,8 +223,9 @@ impl QueryParser {
 
                     let content = line.splitn(2, '\t').nth(1).unwrap_or(line);
 
-                    let title = if content.len() > 60 {
-                        format!("{}...", &content[..60])
+                    let title = if content.chars().count() > 60 {
+                        let truncated: String = content.chars().take(60).collect();
+                        format!("{}...", truncated)
                     } else {
                         content.to_string()
                     };
