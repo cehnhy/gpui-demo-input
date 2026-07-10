@@ -76,8 +76,11 @@ fn open_launcher(cx: &mut App) {
             window_background: WindowBackgroundAppearance::Transparent,
             kind: WindowKind::LayerShell(LayerShellOptions {
                 namespace: "gpui-demo-input".to_string(),
-                layer: Layer::Top,
-                anchor: Anchor::TOP | Anchor::RIGHT | Anchor::BOTTOM | Anchor::LEFT,
+                layer: layer_shell::Layer::Top,
+                anchor: layer_shell::Anchor::TOP
+                    | layer_shell::Anchor::RIGHT
+                    | layer_shell::Anchor::BOTTOM
+                    | layer_shell::Anchor::LEFT,
                 exclusive_zone: None,
                 exclusive_edge: None,
                 // due to func window_border() in gpui's Root component set client inset to 12px,
@@ -97,7 +100,7 @@ fn open_launcher(cx: &mut App) {
                     root
                 });
                 cx.activate(true);
-                gpui_component::Root::new(root, window, cx)
+                gpui_component::Root::new(root, window, cx).bg(rgba(0x00000000))
             })
         },
     )
