@@ -7,6 +7,7 @@
       url = "https://flakehub.com/f/nix-community/fenix/0.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs =
@@ -33,6 +34,34 @@
             };
           }
         );
+      gpuiRuntimeLibraries =
+        pkgs: with pkgs; [
+          fontconfig
+          libxkbcommon
+          wayland
+          vulkan-loader
+        ];
+      mkPackage =
+        { pkgs, ... }:
+        let
+          craneLib = (inputs.crane.mkLib pkgs).overrideToolchain pkgs.rustToolchain;
+        in
+        craneLib.buildPackage {
+          pname = "gpui-demo-input";
+          version = "0.1.0";
+          src = craneLib.cleanCargoSource ./.;
+          strictDeps = true;
+
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+          ];
+
+          buildInputs = gpuiRuntimeLibraries pkgs;
+
+          NIX_LDFLAGS = "-rpath ${pkgs.lib.makeLibraryPath (gpuiRuntimeLibraries pkgs)}";
+
+          dontPatchELF = true;
+        };
     in
     {
       overlays.default = final: prev: {
@@ -54,21 +83,18 @@
         { pkgs, system }:
         {
           default = pkgs.mkShell {
-            packages = with pkgs; [
-              rustToolchain
-              openssl
-              pkg-config
-              cargo-deny
-              cargo-edit
-              cargo-watch
-              rust-analyzer
-              self.formatter.${system}
-
-              fontconfig
-              libxkbcommon
-              wayland
-              vulkan-loader
-            ];
+            packages =
+              (with pkgs; [
+                rustToolchain
+                openssl
+                pkg-config
+                cargo-deny
+                cargo-edit
+                cargo-watch
+                rust-analyzer
+                self.formatter.${system}
+              ])
+              ++ gpuiRuntimeLibraries pkgs;
 
             dontPatchELF = true;
 
@@ -76,15 +102,23 @@
               # Required by rust-analyzer
               RUST_SRC_PATH = "${pkgs.rustToolchain}/lib/rustlib/src/rust/library";
 
-              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
-                fontconfig
-                libxkbcommon
-                wayland
-                vulkan-loader
-              ]);
+              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (gpuiRuntimeLibraries pkgs);
             };
           };
         }
+      );
+
+      packages = forEachSupportedSystem (
+        { pkgs, system }:
+        pkgs.lib.optionalAttrs (system == "x86_64-linux") (
+          let
+            package = mkPackage { inherit pkgs; };
+          in
+          {
+            default = package;
+            gpui-demo-input = package;
+          }
+        )
       );
 
       formatter = forEachSupportedSystem ({ pkgs, ... }: pkgs.nixfmt);
