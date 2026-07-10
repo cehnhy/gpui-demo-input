@@ -126,6 +126,7 @@ impl Render for Root {
         }
 
         div()
+            .id("root")
             .flex()
             .pt(px(310.0))
             .items_start()
@@ -289,6 +290,7 @@ impl ListItem {
 impl RenderOnce for ListItem {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         div()
+            .id("list-item")
             .flex()
             .flex_row()
             .items_center()
