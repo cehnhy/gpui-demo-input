@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Search all nested directories under `$HOME/repo` and first-level directories under `$HOME`, returning at most six unique code targets.
+**Goal:** Search directories up to two levels below `$HOME/repo` and first-level directories under `$HOME`, returning at most six unique code targets.
 
 **Architecture:** The code provider builds two search specifications, runs `fd` independently for each, then merges successful path output through a pure deduplication and limiting helper. Pure helpers are unit tested without invoking external commands.
 
@@ -24,7 +24,7 @@ Add a test expecting `search_specs(Path::new("/home/test"))` to return:
 vec![
     SearchSpec {
         root: PathBuf::from("/home/test/repo"),
-        max_depth: None,
+        max_depth: Some(2),
     },
     SearchSpec {
         root: PathBuf::from("/home/test"),
@@ -43,7 +43,7 @@ Expected: compilation fails because `SearchSpec` and `search_specs` do not exist
 
 Define a private `SearchSpec { root: PathBuf, max_depth: Option<usize> }` and a
 `search_specs(home: &Path) -> Vec<SearchSpec>` helper producing the expected
-ordered specifications.
+ordered specifications, limiting the repository root to two levels.
 
 - [ ] **Step 4: Run the focused test**
 

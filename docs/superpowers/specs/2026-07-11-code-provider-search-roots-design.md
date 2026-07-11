@@ -9,7 +9,7 @@ Expand the `code` query provider so it can find deeply nested projects under
 
 The provider performs two ordered searches with the same query:
 
-1. Recursively search all directories below `$HOME/repo` without a depth limit.
+1. Search directories up to two levels below `$HOME/repo`.
 2. Search directories directly below `$HOME` with a maximum depth of one.
 
 Results from the repository search come first. Results are deduplicated by full

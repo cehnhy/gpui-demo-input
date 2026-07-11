@@ -13,7 +13,7 @@ fn search_specs(home: &Path) -> Vec<SearchSpec> {
     vec![
         SearchSpec {
             root: home.join("repo"),
-            max_depth: None,
+            max_depth: Some(2),
         },
         SearchSpec {
             root: home.to_path_buf(),
@@ -117,7 +117,7 @@ mod tests {
             vec![
                 SearchSpec {
                     root: PathBuf::from("/home/test/repo"),
-                    max_depth: None,
+                    max_depth: Some(2),
                 },
                 SearchSpec {
                     root: PathBuf::from("/home/test"),
