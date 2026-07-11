@@ -3,29 +3,6 @@ use freedesktop_desktop_entry::{default_paths, get_languages_from_env, Iter};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-pub fn to_query_parser(query: String) -> LegacyQueryParser {
-    let mut query = query;
-
-    let exist_triggers = vec!["code", "float", "time", "c"];
-    if !exist_triggers
-        .iter()
-        .any(|&p| query.starts_with(&format!("{} ", p)))
-    {
-        query = format!("application {}", query);
-    }
-
-    let mut args: Vec<String> = query.split(' ').map(|s| s.to_string()).collect();
-    return LegacyQueryParser {
-        trigger: args.remove(0),
-        args,
-    };
-}
-
-pub struct LegacyQueryParser {
-    trigger: String, // application, code, float, time, clip
-    args: Vec<String>,
-}
-
 pub struct QueryParserItem {
     pub title: String,
     pub subtitle: String,
@@ -52,6 +29,18 @@ impl DefaultQueryParser {
     }
 }
 
+impl Default for DefaultQueryParser {
+    fn default() -> Self {
+        Self::new(vec![
+            Box::new(ApplicationQueryProvider),
+            Box::new(CodeQueryProvider),
+            Box::new(FloatQueryProvider),
+            Box::new(TimeQueryProvider),
+            Box::new(ClipboardQueryProvider),
+        ])
+    }
+}
+
 impl QueryParser for DefaultQueryParser {
     fn parse(&self, query: &str) -> Vec<QueryParserItem> {
         let tokens = query
@@ -74,26 +63,19 @@ impl QueryParser for DefaultQueryParser {
     }
 }
 
-impl LegacyQueryParser {
-    pub fn parse(&self) -> Vec<QueryParserItem> {
-        match self.trigger.as_str() {
-            "application" => self.parse_application(),
-            "code" => self.parse_code(),
-            "float" => self.parse_float(),
-            "time" => self.parse_time(),
-            "c" => self.parse_clip(),
-            _ => vec![],
-        }
+struct ApplicationQueryProvider;
+
+impl QueryProvider for ApplicationQueryProvider {
+    fn trigger(&self) -> &'static str {
+        "application"
     }
 
-    fn parse_application(&self) -> Vec<QueryParserItem> {
-        let arg = self.args[0].clone();
+    fn parse(&self, args: &[String]) -> Vec<QueryParserItem> {
+        let arg = args.join(" ");
         let mut items = vec![];
         let mut seen_ids = HashSet::new();
-
         let locales = get_languages_from_env();
 
-        // Add NixOS-specific paths to the default paths
         let mut paths: Vec<PathBuf> = default_paths().collect();
         if let Ok(home) = std::env::var("HOME") {
             paths.push(PathBuf::from(format!(
@@ -110,15 +92,12 @@ impl LegacyQueryParser {
                 continue;
             }
 
-            // Get desktop file ID to deduplicate
             let desktop_id = entry
                 .path
                 .file_name()
-                .and_then(|n| n.to_str())
+                .and_then(|name| name.to_str())
                 .unwrap_or("");
-
             if !seen_ids.insert(desktop_id.to_string()) {
-                // Already seen this desktop file, skip it
                 continue;
             }
 
@@ -126,22 +105,20 @@ impl LegacyQueryParser {
                 Some(name) => name.to_string(),
                 None => continue,
             };
-
             if !name.to_lowercase().contains(&arg.to_lowercase()) {
                 continue;
             }
 
             let comment = entry
                 .comment(&locales)
-                .map(|c| c.to_string())
-                .unwrap_or_else(|| "".to_string());
-
+                .map(|comment| comment.to_string())
+                .unwrap_or_default();
             let action = match entry.exec() {
                 Some(exec) => exec.to_string(),
                 None => continue,
             };
 
-            let mut icon = PathBuf::from("");
+            let mut icon = PathBuf::new();
             if let Some(icon_path) = entry.icon() {
                 if let Some(found_icon) = freedesktop_icons::lookup(&icon_path)
                     .with_cache()
@@ -162,12 +139,19 @@ impl LegacyQueryParser {
 
         items
     }
+}
 
-    fn parse_code(&self) -> Vec<QueryParserItem> {
-        if self.args.is_empty() {
+struct CodeQueryProvider;
+
+impl QueryProvider for CodeQueryProvider {
+    fn trigger(&self) -> &'static str {
+        "code"
+    }
+
+    fn parse(&self, args: &[String]) -> Vec<QueryParserItem> {
+        let Some(arg) = args.first() else {
             return vec![];
-        }
-        let arg = self.args[0].clone();
+        };
 
         let output = std::process::Command::new("fd")
             .arg("--max-results")
@@ -176,7 +160,7 @@ impl LegacyQueryParser {
             .arg("2")
             .arg("-t")
             .arg("d")
-            .arg(&arg)
+            .arg(arg)
             .arg(format!(
                 "{}/repo",
                 std::env::var("HOME").unwrap_or_default()
@@ -184,25 +168,19 @@ impl LegacyQueryParser {
             .output();
 
         let mut items = vec![];
-
         if let Ok(output) = output {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                for line in stdout.lines() {
-                    if line.is_empty() {
-                        continue;
-                    }
-
+                for line in stdout.lines().filter(|line| !line.is_empty()) {
                     let path = PathBuf::from(line);
                     let title = path
                         .file_name()
-                        .and_then(|n| n.to_str())
+                        .and_then(|name| name.to_str())
                         .unwrap_or(line)
                         .to_string();
-
                     let subtitle = path
                         .parent()
-                        .and_then(|p| p.to_str())
+                        .and_then(|parent| parent.to_str())
                         .unwrap_or("")
                         .to_string();
 
@@ -210,7 +188,7 @@ impl LegacyQueryParser {
                         title,
                         subtitle,
                         action: format!("code {}", line),
-                        icon: PathBuf::from(""),
+                        icon: PathBuf::new(),
                     });
                 }
             }
@@ -218,30 +196,53 @@ impl LegacyQueryParser {
 
         items
     }
+}
 
-    fn parse_float(&self) -> Vec<QueryParserItem> {
-        return vec![QueryParserItem {
+struct FloatQueryProvider;
+
+impl QueryProvider for FloatQueryProvider {
+    fn trigger(&self) -> &'static str {
+        "float"
+    }
+
+    fn parse(&self, _args: &[String]) -> Vec<QueryParserItem> {
+        vec![QueryParserItem {
             title: "toggle floating".to_string(),
-            subtitle: "".to_string(),
+            subtitle: String::new(),
             action: "niri msg action toggle-window-floating".to_string(),
-            icon: PathBuf::from(""),
-        }];
+            icon: PathBuf::new(),
+        }]
+    }
+}
+
+struct TimeQueryProvider;
+
+impl QueryProvider for TimeQueryProvider {
+    fn trigger(&self) -> &'static str {
+        "time"
     }
 
-    fn parse_time(&self) -> Vec<QueryParserItem> {
-        return vec![QueryParserItem {
+    fn parse(&self, _args: &[String]) -> Vec<QueryParserItem> {
+        vec![QueryParserItem {
             title: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-            subtitle: "".to_string(),
-            action: "".to_string(),
-            icon: PathBuf::from(""),
-        }];
+            subtitle: String::new(),
+            action: String::new(),
+            icon: PathBuf::new(),
+        }]
+    }
+}
+
+struct ClipboardQueryProvider;
+
+impl QueryProvider for ClipboardQueryProvider {
+    fn trigger(&self) -> &'static str {
+        "c"
     }
 
-    fn parse_clip(&self) -> Vec<QueryParserItem> {
-        if self.args.is_empty() {
+    fn parse(&self, args: &[String]) -> Vec<QueryParserItem> {
+        let Some(arg) = args.first() else {
             return vec![];
-        }
-        let arg = self.args[0].clone();
+        };
 
         let output = if arg.is_empty() {
             std::process::Command::new("cliphist").arg("list").output()
@@ -253,29 +254,22 @@ impl LegacyQueryParser {
         };
 
         let mut items = vec![];
-
         if let Ok(output) = output {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                for line in stdout.lines() {
-                    if line.is_empty() {
-                        continue;
-                    }
-
-                    let content = line.splitn(2, '\t').nth(1).unwrap_or(line);
-
+                for line in stdout.lines().filter(|line| !line.is_empty()) {
+                    let content = line.split_once('\t').map_or(line, |(_, content)| content);
                     let title = if content.chars().count() > 60 {
-                        let truncated: String = content.chars().take(60).collect();
-                        format!("{}...", truncated)
+                        format!("{}...", content.chars().take(60).collect::<String>())
                     } else {
                         content.to_string()
                     };
 
                     items.push(QueryParserItem {
                         title,
-                        subtitle: "".to_string(),
+                        subtitle: String::new(),
                         action: format!("wl-copy {}", content),
-                        icon: PathBuf::from(""),
+                        icon: PathBuf::new(),
                     });
 
                     if items.len() >= 100 {
@@ -325,10 +319,8 @@ mod tests {
     #[test]
     fn routes_explicit_trigger_to_matching_provider() {
         let calls = Rc::new(RefCell::new(Vec::new()));
-        let parser = DefaultQueryParser::new(vec![Box::new(FakeProvider::new(
-            "code",
-            Rc::clone(&calls),
-        ))]);
+        let parser =
+            DefaultQueryParser::new(vec![Box::new(FakeProvider::new("code", Rc::clone(&calls)))]);
 
         let items = parser.parse("code gpui demo");
 
@@ -377,5 +369,17 @@ mod tests {
         let parser = DefaultQueryParser::new(Vec::new());
 
         assert!(parser.parse("unknown query").is_empty());
+    }
+
+    #[test]
+    fn default_parser_registers_existing_triggers() {
+        let parser = DefaultQueryParser::default();
+        let triggers = parser
+            .providers
+            .iter()
+            .map(|provider| provider.trigger())
+            .collect::<Vec<_>>();
+
+        assert_eq!(triggers, vec!["application", "code", "float", "time", "c"]);
     }
 }

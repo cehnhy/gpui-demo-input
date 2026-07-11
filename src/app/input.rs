@@ -1,4 +1,4 @@
-use crate::app::query_parser;
+use crate::app::query_parser::{DefaultQueryParser, QueryParser};
 use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
 use prelude::FluentBuilder;
@@ -229,8 +229,8 @@ impl Launcher {
 
     fn search(&mut self, _cx: &mut Context<Self>, query: &str) {
         self.reset();
-        let query_parser = query_parser::to_query_parser(query.into());
-        let query_items = query_parser.parse();
+        let query_parser = DefaultQueryParser::default();
+        let query_items = query_parser.parse(query);
         for item in query_items {
             self.items.push(ListItem::new(
                 item.title,
