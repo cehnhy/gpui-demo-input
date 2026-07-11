@@ -94,6 +94,13 @@ impl Root {
         }
     }
 
+    fn open_item(&mut self, idx: usize, cx: &mut Context<Self>) {
+        self.state.update(cx, |state, _cx| {
+            state.selected_id = idx;
+        });
+        self._open_application_task = Some(cx.spawn(Self::do_open_application_task));
+    }
+
     fn select_last_item(&mut self, _: &Up, _window: &mut Window, cx: &mut Context<Self>) {
         self.state.update(cx, Launcher::up);
         let selected_id = self.state.read(cx).selected_id;
@@ -115,6 +122,7 @@ impl Root {
 
 impl Render for Root {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let root_entity = cx.weak_entity();
         let mut h = 48;
 
         let mut state_len = self.state.read(cx).items.len();
@@ -163,15 +171,14 @@ impl Render for Root {
                         div().flex_1().pb_2().px_2().child(
                             list(
                                 self.list_state.clone(),
-                                cx.processor(|root, idx, _window, app| {
+                                cx.processor(move |root, idx, _window, app| {
                                     let state = root.state.read(app);
                                     let item: &ListItem = state.items.get(idx).unwrap();
                                     let mut item = item.clone();
                                     if idx == state.selected_id {
                                         item.select();
                                     }
-                                    let launcher = root.state.clone();
-                                    let window_handle = root.window_handle;
+                                    let root_entity = root_entity.clone();
 
                                     div()
                                         .id(("list-item", idx))
@@ -179,16 +186,9 @@ impl Render for Root {
                                         .hover(|this| this.bg(rgb(0x333333)))
                                         .on_click(move |_event, _window, cx| {
                                             cx.stop_propagation();
-                                            launcher.update(cx, |state, _cx| {
-                                                state.selected_id = idx;
-                                            });
-                                            let launched = launcher.read(cx).launch();
-                                            if launched {
-                                                cx.update_window(window_handle, |_, window, _| {
-                                                    window.remove_window()
-                                                })
-                                                .unwrap();
-                                            }
+                                            root_entity
+                                                .update(cx, |root, cx| root.open_item(idx, cx))
+                                                .ok();
                                         })
                                         .child(item)
                                         .into_any_element()
