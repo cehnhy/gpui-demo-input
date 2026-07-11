@@ -153,7 +153,7 @@ impl Root {
 impl Render for Root {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let root_entity = cx.weak_entity();
-        let mut h = 75;
+        let mut h = 48;
 
         let mut state_len = self.state.read(cx).items.len();
         if state_len > 6 {
@@ -180,63 +180,66 @@ impl Render for Root {
                     .on_action(cx.listener(Self::select_next_item))
                     .on_action(cx.listener(Self::cancel))
                     .w(px(800.0))
-                    .h(px(h as f32))
                     .flex()
                     .flex_col()
-                    .bg(rgba(0x1E1E1EFF))
-                    .rounded(px(10.0))
-                    .overflow_hidden()
-                    .on_mouse_down(gpui::MouseButton::Left, |_event, _window, cx| {
-                        cx.stop_propagation();
-                    })
+                    .gap_1()
                     .child(
                         div()
-                            .p_2()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .px_1()
-                                    .text_sm()
-                                    .text_color(rgb(0x929292))
-                                    .child(self.time.clone()),
-                            )
-                            .child(
-                                Input::new(&self.query)
-                                    .border_1()
-                                    .border_color(rgb(0x3a3a3a))
-                                    .bg(rgba(0x1E1E1EFF)),
-                            ),
+                            .px_3()
+                            .text_sm()
+                            .text_color(rgb(0x929292))
+                            .child(self.time.clone()),
                     )
                     .child(
-                        div().flex_1().pb_2().px_2().child(
-                            list(
-                                self.list_state.clone(),
-                                cx.processor(move |root, idx, _window, app| {
-                                    let state = root.state.read(app);
-                                    let item: &ListItem = state.items.get(idx).unwrap();
-                                    let mut item = item.clone();
-                                    item.set_index(idx);
-                                    if idx == state.selected_id {
-                                        item.select();
-                                    }
-                                    let root_entity = root_entity.clone();
-
-                                    div()
-                                        .id(("list-item-click", idx))
-                                        .on_click(move |_event, _window, cx| {
-                                            cx.stop_propagation();
-                                            root_entity
-                                                .update(cx, |root, cx| root.open_item(idx, cx))
-                                                .ok();
-                                        })
-                                        .child(item)
-                                        .into_any_element()
-                                }),
+                        div()
+                            .h(px(h as f32))
+                            .flex()
+                            .flex_col()
+                            .bg(rgba(0x1E1E1EFF))
+                            .rounded(px(10.0))
+                            .overflow_hidden()
+                            .on_mouse_down(gpui::MouseButton::Left, |_event, _window, cx| {
+                                cx.stop_propagation();
+                            })
+                            .child(
+                                div().p_2().child(
+                                    Input::new(&self.query)
+                                        .border_1()
+                                        .border_color(rgb(0x3a3a3a))
+                                        .bg(rgba(0x1E1E1EFF)),
+                                ),
                             )
-                            .size_full(),
-                        ),
+                            .child(
+                                div().flex_1().pb_2().px_2().child(
+                                    list(
+                                        self.list_state.clone(),
+                                        cx.processor(move |root, idx, _window, app| {
+                                            let state = root.state.read(app);
+                                            let item: &ListItem = state.items.get(idx).unwrap();
+                                            let mut item = item.clone();
+                                            item.set_index(idx);
+                                            if idx == state.selected_id {
+                                                item.select();
+                                            }
+                                            let root_entity = root_entity.clone();
+
+                                            div()
+                                                .id(("list-item-click", idx))
+                                                .on_click(move |_event, _window, cx| {
+                                                    cx.stop_propagation();
+                                                    root_entity
+                                                        .update(cx, |root, cx| {
+                                                            root.open_item(idx, cx)
+                                                        })
+                                                        .ok();
+                                                })
+                                                .child(item)
+                                                .into_any_element()
+                                        }),
+                                    )
+                                    .size_full(),
+                                ),
+                            ),
                     ),
             )
     }
