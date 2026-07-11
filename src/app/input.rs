@@ -170,7 +170,28 @@ impl Render for Root {
                                     if idx == state.selected_id {
                                         item.select();
                                     }
-                                    div().child(item).into_any_element()
+                                    let launcher = root.state.clone();
+                                    let window_handle = root.window_handle;
+
+                                    div()
+                                        .id(("list-item", idx))
+                                        .cursor_pointer()
+                                        .hover(|this| this.bg(rgb(0x333333)))
+                                        .on_click(move |_event, _window, cx| {
+                                            cx.stop_propagation();
+                                            launcher.update(cx, |state, _cx| {
+                                                state.selected_id = idx;
+                                            });
+                                            let launched = launcher.read(cx).launch();
+                                            if launched {
+                                                cx.update_window(window_handle, |_, window, _| {
+                                                    window.remove_window()
+                                                })
+                                                .unwrap();
+                                            }
+                                        })
+                                        .child(item)
+                                        .into_any_element()
                                 }),
                             )
                             .size_full(),
@@ -290,7 +311,6 @@ impl ListItem {
 impl RenderOnce for ListItem {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         div()
-            .id("list-item")
             .flex()
             .flex_row()
             .items_center()
