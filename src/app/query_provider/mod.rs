@@ -2,14 +2,12 @@ mod application;
 mod clipboard;
 mod code;
 mod float;
-mod time;
 
 use super::query_parser::QueryProvider;
 use application::ApplicationQueryProvider;
 use clipboard::ClipboardQueryProvider;
 use code::CodeQueryProvider;
 use float::FloatQueryProvider;
-use time::TimeQueryProvider;
 
 fn query_arg(args: &[String]) -> &str {
     args.first().map(String::as_str).unwrap_or_default()
@@ -20,7 +18,6 @@ pub(super) fn default_providers() -> Vec<Box<dyn QueryProvider>> {
         Box::new(ApplicationQueryProvider),
         Box::new(CodeQueryProvider),
         Box::new(FloatQueryProvider),
-        Box::new(TimeQueryProvider),
         Box::new(ClipboardQueryProvider),
     ]
 }

@@ -151,6 +151,6 @@ mod tests {
             .map(|provider| provider.trigger())
             .collect::<Vec<_>>();
 
-        assert_eq!(triggers, vec!["application", "code", "float", "time", "c"]);
+        assert_eq!(triggers, vec!["application", "code", "float", "c"]);
     }
 }
