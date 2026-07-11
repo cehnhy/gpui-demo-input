@@ -5,7 +5,7 @@ use prelude::FluentBuilder;
 use std::{path::PathBuf, time::Instant};
 
 const CONTEXT: &str = "root";
-const LIST_ITEM_ACTIVE_BG: u32 = 0x3A3A3A;
+const LIST_ITEM_ACTIVE_BG: u32 = 0x444444;
 actions!(root, [Up, Down, ESC]);
 
 pub fn init(cx: &mut App) {
