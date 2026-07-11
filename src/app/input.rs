@@ -3,7 +3,10 @@ use chrono::{DateTime, Local};
 use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
 use prelude::FluentBuilder;
-use std::{path::PathBuf, time::Instant};
+use std::{
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
 const CONTEXT: &str = "root";
 const LIST_ITEM_ACTIVE_BG: u32 = 0x444444;
@@ -26,6 +29,8 @@ pub struct Root {
     query: Entity<InputState>,
     state: Entity<Launcher>,
     list_state: ListState,
+    time: SharedString,
+    _update_time_task: Task<()>,
     _update_list_task: Option<Task<()>>,
     _open_application_task: Option<Task<()>>,
 }
@@ -42,14 +47,33 @@ impl Root {
 
         // list state
         let list_state = ListState::new(0, ListAlignment::Top, px(20.));
+        let time = format_time(Local::now()).into();
 
         Self {
             window_handle,
             query,
             state,
             list_state,
+            time,
+            _update_time_task: cx.spawn(Self::do_update_time_task),
             _update_list_task: Some(cx.spawn(Self::do_update_list_task)),
             _open_application_task: None,
+        }
+    }
+
+    async fn do_update_time_task(self_weak_entity: WeakEntity<Self>, cx: &mut AsyncApp) {
+        loop {
+            cx.background_executor().timer(Duration::from_secs(1)).await;
+
+            if self_weak_entity
+                .update(cx, |root, cx| {
+                    root.time = format_time(Local::now()).into();
+                    cx.notify();
+                })
+                .is_err()
+            {
+                break;
+            }
         }
     }
 
@@ -129,7 +153,7 @@ impl Root {
 impl Render for Root {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let root_entity = cx.weak_entity();
-        let mut h = 48;
+        let mut h = 75;
 
         let mut state_len = self.state.read(cx).items.len();
         if state_len > 6 {
@@ -166,12 +190,24 @@ impl Render for Root {
                         cx.stop_propagation();
                     })
                     .child(
-                        div().p_2().child(
-                            Input::new(&self.query)
-                                .border_1()
-                                .border_color(rgb(0x3a3a3a))
-                                .bg(rgba(0x1E1E1EFF)),
-                        ),
+                        div()
+                            .p_2()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .px_1()
+                                    .text_sm()
+                                    .text_color(rgb(0x929292))
+                                    .child(self.time.clone()),
+                            )
+                            .child(
+                                Input::new(&self.query)
+                                    .border_1()
+                                    .border_color(rgb(0x3a3a3a))
+                                    .bg(rgba(0x1E1E1EFF)),
+                            ),
                     )
                     .child(
                         div().flex_1().pb_2().px_2().child(
