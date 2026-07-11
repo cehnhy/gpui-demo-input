@@ -184,6 +184,7 @@ impl Render for Root {
                                     div()
                                         .id(("list-item", idx))
                                         .cursor_pointer()
+                                        .rounded_md()
                                         .hover(|this| this.bg(rgb(LIST_ITEM_ACTIVE_BG)))
                                         .on_click(move |_event, _window, cx| {
                                             cx.stop_propagation();
