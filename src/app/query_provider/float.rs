@@ -10,7 +10,7 @@ impl QueryProvider for FloatQueryProvider {
 
     fn parse(&self, _args: &[String]) -> Vec<QueryParserItem> {
         vec![QueryParserItem {
-            title: "toggle floating".to_string(),
+            title: "toggle current window floating".to_string(),
             subtitle: String::new(),
             action: "niri msg action toggle-window-floating".to_string(),
             icon: PathBuf::new(),
