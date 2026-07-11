@@ -281,3 +281,132 @@ git log -4 --oneline
 ```
 
 Expected: implementation files are committed. Browser-companion files under `.superpowers/` may remain untracked and must not be committed.
+
+### Task 5: Separate the Time Label from the Query Panel
+
+**Files:**
+- Modify: `src/app/input.rs`
+
+- [ ] **Step 1: Restore the query/list panel's own base height**
+
+Change the base panel height from `75` back to `48`. The standalone time label belongs to the transparent outer wrapper and must not be counted as part of the dark query/list panel:
+
+```rust
+let mut h = 48;
+```
+
+- [ ] **Step 2: Introduce a transparent outer wrapper**
+
+Keep the existing event handlers on a new 800-pixel-wide vertical wrapper. Render the time label first, then the dark rounded query/list panel as its sibling:
+
+```rust
+.child(
+    div()
+        .key_context(CONTEXT)
+        .on_action(cx.listener(Self::select_last_item))
+        .on_action(cx.listener(Self::select_next_item))
+        .on_action(cx.listener(Self::cancel))
+        .w(px(800.0))
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .px_3()
+                .text_sm()
+                .text_color(rgb(0x929292))
+                .child(self.time.clone()),
+        )
+        .child(
+            div()
+                .h(px(h as f32))
+                .flex()
+                .flex_col()
+                .bg(rgba(0x1E1E1EFF))
+                .rounded(px(10.0))
+                .overflow_hidden()
+                .on_mouse_down(gpui::MouseButton::Left, |_event, _window, cx| {
+                    cx.stop_propagation();
+                })
+                .child(
+                    div().p_2().child(
+                        Input::new(&self.query)
+                            .border_1()
+                            .border_color(rgb(0x3a3a3a))
+                            .bg(rgba(0x1E1E1EFF)),
+                    ),
+                )
+                .child(
+                    div().flex_1().pb_2().px_2().child(
+                        list(
+                            self.list_state.clone(),
+                            cx.processor(move |root, idx, _window, app| {
+                                let state = root.state.read(app);
+                                let item: &ListItem = state.items.get(idx).unwrap();
+                                let mut item = item.clone();
+                                item.set_index(idx);
+                                if idx == state.selected_id {
+                                    item.select();
+                                }
+                                let root_entity = root_entity.clone();
+
+                                div()
+                                    .id(("list-item-click", idx))
+                                    .on_click(move |_event, _window, cx| {
+                                        cx.stop_propagation();
+                                        root_entity
+                                            .update(cx, |root, cx| root.open_item(idx, cx))
+                                            .ok();
+                                    })
+                                    .child(item)
+                                    .into_any_element()
+                            }),
+                        )
+                        .size_full(),
+                    ),
+                ),
+        ),
+)
+```
+
+- [ ] **Step 3: Compile and run the complete test suite**
+
+Run:
+
+```bash
+cargo test
+```
+
+Expected: compilation succeeds and all 11 tests PASS. This layout-only change has no stable unit-test seam in the current GPUI render tree, so compilation plus visual inspection verifies element composition while the existing formatter test continues to cover time content.
+
+- [ ] **Step 4: Format and inspect the render tree**
+
+Run:
+
+```bash
+cargo fmt
+cargo fmt --check
+sed -n '145,245p' src/app/input.rs
+```
+
+Expected: the time label is a sibling immediately before the dark rounded panel; only the inner panel has `.bg(...)`, `.rounded(...)`, and `.overflow_hidden()`.
+
+- [ ] **Step 5: Commit the standalone layout**
+
+```bash
+git add src/app/input.rs
+git commit -m "style: separate time from query panel"
+```
+
+- [ ] **Step 6: Run final verification**
+
+Run:
+
+```bash
+cargo fmt --check
+cargo test
+git diff --check
+git status --short
+```
+
+Expected: formatting and whitespace checks succeed, all 11 tests PASS, and only `.superpowers/` may remain untracked.
