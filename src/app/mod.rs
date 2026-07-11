@@ -1,5 +1,6 @@
 pub mod input;
 pub mod query_parser;
+mod query_provider;
 pub mod theme;
 
 use crate::bridge::{event::Event, server::Server, Service as _};
