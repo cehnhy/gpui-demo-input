@@ -1,3 +1,4 @@
+use super::query_arg;
 use crate::app::query_parser::{QueryParserItem, QueryProvider};
 use std::path::PathBuf;
 
@@ -9,9 +10,7 @@ impl QueryProvider for CodeQueryProvider {
     }
 
     fn parse(&self, args: &[String]) -> Vec<QueryParserItem> {
-        let Some(arg) = args.first() else {
-            return vec![];
-        };
+        let arg = query_arg(args);
 
         let output = std::process::Command::new("fd")
             .arg("--max-results")
