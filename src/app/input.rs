@@ -176,16 +176,14 @@ impl Render for Root {
                                     let state = root.state.read(app);
                                     let item: &ListItem = state.items.get(idx).unwrap();
                                     let mut item = item.clone();
+                                    item.set_index(idx);
                                     if idx == state.selected_id {
                                         item.select();
                                     }
                                     let root_entity = root_entity.clone();
 
                                     div()
-                                        .id(("list-item", idx))
-                                        .cursor_pointer()
-                                        .rounded_md()
-                                        .hover(|this| this.bg(rgb(LIST_ITEM_ACTIVE_BG)))
+                                        .id(("list-item-click", idx))
                                         .on_click(move |_event, _window, cx| {
                                             cx.stop_propagation();
                                             root_entity
@@ -287,6 +285,7 @@ impl Launcher {
 
 #[derive(Clone, Debug, IntoElement)]
 pub struct ListItem {
+    index: usize,
     selected: bool,
     title: SharedString,
     subtitle: SharedString,
@@ -297,6 +296,7 @@ pub struct ListItem {
 impl ListItem {
     pub fn new(title: String, subtitle: String, action: String, icon: PathBuf) -> Self {
         ListItem {
+            index: 0,
             selected: false,
             title: title.into(),
             subtitle: subtitle.into(),
@@ -308,16 +308,23 @@ impl ListItem {
     pub fn select(&mut self) {
         self.selected = true;
     }
+
+    pub fn set_index(&mut self, index: usize) {
+        self.index = index;
+    }
 }
 
 impl RenderOnce for ListItem {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         div()
+            .id(("list-item", self.index))
+            .cursor_pointer()
             .flex()
             .flex_row()
             .items_center()
             .gap_1()
             .when(self.selected, |this| this.bg(rgb(LIST_ITEM_ACTIVE_BG)))
+            .hover(|this| this.bg(rgb(LIST_ITEM_ACTIVE_BG)))
             .my_0p5()
             .pl_1()
             .rounded_md()
