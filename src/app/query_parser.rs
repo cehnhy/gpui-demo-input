@@ -15,7 +15,7 @@ pub trait QueryParser {
 }
 
 pub trait QueryProvider {
-    fn trigger(&self) -> &'static str;
+    fn name(&self) -> &'static str;
     fn parse(&self, args: &[String]) -> Vec<QueryParserItem>;
 }
 
@@ -47,9 +47,11 @@ impl QueryParser for DefaultQueryParser {
             .split_whitespace()
             .map(str::to_owned)
             .collect::<Vec<_>>();
-        let explicit = tokens
-            .first()
-            .and_then(|trigger| self.providers.iter().find(|p| p.trigger() == trigger));
+        let explicit = tokens.first().and_then(|name| {
+            self.providers
+                .iter()
+                .find(|provider| provider.name() == name)
+        });
 
         if let Some(provider) = explicit {
             return provider.parse(&tokens[1..]);
@@ -57,7 +59,7 @@ impl QueryParser for DefaultQueryParser {
 
         self.providers
             .iter()
-            .find(|provider| provider.trigger() == "application")
+            .find(|provider| provider.name() == "application")
             .map(|provider| provider.parse(&tokens))
             .unwrap_or_default()
     }
@@ -66,7 +68,7 @@ impl QueryParser for DefaultQueryParser {
 struct ApplicationQueryProvider;
 
 impl QueryProvider for ApplicationQueryProvider {
-    fn trigger(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         "application"
     }
 
@@ -144,7 +146,7 @@ impl QueryProvider for ApplicationQueryProvider {
 struct CodeQueryProvider;
 
 impl QueryProvider for CodeQueryProvider {
-    fn trigger(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         "code"
     }
 
@@ -201,7 +203,7 @@ impl QueryProvider for CodeQueryProvider {
 struct FloatQueryProvider;
 
 impl QueryProvider for FloatQueryProvider {
-    fn trigger(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         "float"
     }
 
@@ -218,7 +220,7 @@ impl QueryProvider for FloatQueryProvider {
 struct TimeQueryProvider;
 
 impl QueryProvider for TimeQueryProvider {
-    fn trigger(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         "time"
     }
 
@@ -235,7 +237,7 @@ impl QueryProvider for TimeQueryProvider {
 struct ClipboardQueryProvider;
 
 impl QueryProvider for ClipboardQueryProvider {
-    fn trigger(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         "c"
     }
 
@@ -290,25 +292,25 @@ mod tests {
     use std::rc::Rc;
 
     struct FakeProvider {
-        trigger: &'static str,
+        name: &'static str,
         calls: Rc<RefCell<Vec<Vec<String>>>>,
     }
 
     impl FakeProvider {
-        fn new(trigger: &'static str, calls: Rc<RefCell<Vec<Vec<String>>>>) -> Self {
-            Self { trigger, calls }
+        fn new(name: &'static str, calls: Rc<RefCell<Vec<Vec<String>>>>) -> Self {
+            Self { name, calls }
         }
     }
 
     impl QueryProvider for FakeProvider {
-        fn trigger(&self) -> &'static str {
-            self.trigger
+        fn name(&self) -> &'static str {
+            self.name
         }
 
         fn parse(&self, args: &[String]) -> Vec<QueryParserItem> {
             self.calls.borrow_mut().push(args.to_vec());
             vec![QueryParserItem {
-                title: self.trigger.to_string(),
+                title: self.name.to_string(),
                 subtitle: String::new(),
                 action: String::new(),
                 icon: PathBuf::new(),
@@ -372,14 +374,17 @@ mod tests {
     }
 
     #[test]
-    fn default_parser_registers_existing_triggers() {
+    fn default_parser_registers_existing_provider_names() {
         let parser = DefaultQueryParser::default();
-        let triggers = parser
+        let provider_names = parser
             .providers
             .iter()
-            .map(|provider| provider.trigger())
+            .map(|provider| provider.name())
             .collect::<Vec<_>>();
 
-        assert_eq!(triggers, vec!["application", "code", "float", "time", "c"]);
+        assert_eq!(
+            provider_names,
+            vec!["application", "code", "float", "time", "c"]
+        );
     }
 }
