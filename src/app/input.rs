@@ -5,6 +5,7 @@ use prelude::FluentBuilder;
 use std::{path::PathBuf, time::Instant};
 
 const CONTEXT: &str = "root";
+const LIST_ITEM_ACTIVE_BG: u32 = 0x343434;
 actions!(root, [Up, Down, ESC]);
 
 pub fn init(cx: &mut App) {
@@ -183,7 +184,7 @@ impl Render for Root {
                                     div()
                                         .id(("list-item", idx))
                                         .cursor_pointer()
-                                        .hover(|this| this.bg(rgb(0x333333)))
+                                        .hover(|this| this.bg(rgb(LIST_ITEM_ACTIVE_BG)))
                                         .on_click(move |_event, _window, cx| {
                                             cx.stop_propagation();
                                             root_entity
@@ -315,7 +316,7 @@ impl RenderOnce for ListItem {
             .flex_row()
             .items_center()
             .gap_1()
-            .when(self.selected, |this| this.bg(rgb(0x2a2a2a)))
+            .when(self.selected, |this| this.bg(rgb(LIST_ITEM_ACTIVE_BG)))
             .my_0p5()
             .pl_1()
             .rounded_md()
