@@ -13,11 +13,13 @@ Remove the `time` query provider and show the current local time above the query
 
 ## UI Design
 
-The time uses the format `YYYY-MM-DD HH:MM:SS`. It is rendered as small, muted, left-aligned text above the input and aligned with the input's content area. The launcher height increases enough to accommodate the label without reducing the visible result-list area.
+The time uses the format `YYYY-MM-DD HH:MM:SS`. It is rendered as small, muted, left-aligned text above the query panel and aligned with the input's content area. The time is a standalone element on the transparent outer layout: it is not inside the query/list background and is not clipped by the panel's rounded corners. A small gap separates it from the panel. The query/list panel keeps enough height to preserve the visible result-list area.
 
 ## Implementation
 
 `Root` owns the formatted time string and a long-lived GPUI task. The task waits for one second, upgrades the weak `Root` entity, updates the string from `chrono::Local::now()`, and calls `cx.notify()` to redraw the window. The first value is initialized synchronously so the label is populated as soon as the window opens.
+
+The render tree uses a transparent, 800-pixel-wide vertical wrapper. The time label and the existing rounded query/list panel are siblings within that wrapper. Only the query/list sibling receives the dark background, rounded corners, and overflow clipping.
 
 Time formatting is isolated in a small helper so its output can be tested without running a GPUI window.
 
