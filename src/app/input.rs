@@ -1,4 +1,5 @@
 use crate::app::query_parser::{DefaultQueryParser, QueryParser};
+use chrono::{DateTime, Local};
 use gpui::*;
 use gpui_component::input::{Input, InputEvent, InputState};
 use prelude::FluentBuilder;
@@ -7,6 +8,10 @@ use std::{path::PathBuf, time::Instant};
 const CONTEXT: &str = "root";
 const LIST_ITEM_ACTIVE_BG: u32 = 0x444444;
 actions!(root, [Up, Down, ESC]);
+
+fn format_time(time: DateTime<Local>) -> String {
+    time.format("%Y-%m-%d %H:%M:%S").to_string()
+}
 
 pub fn init(cx: &mut App) {
     cx.bind_keys([
@@ -345,5 +350,21 @@ impl RenderOnce for ListItem {
                             .child(div().text_sm().child(self.subtitle.clone()))
                     }),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_time;
+    use chrono::TimeZone;
+
+    #[test]
+    fn formats_time_for_the_launcher_label() {
+        let time = chrono::Local
+            .with_ymd_and_hms(2026, 7, 11, 14, 30, 25)
+            .single()
+            .expect("test time should be valid");
+
+        assert_eq!(format_time(time), "2026-07-11 14:30:25");
     }
 }
